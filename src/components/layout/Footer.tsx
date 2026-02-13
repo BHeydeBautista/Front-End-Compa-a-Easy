@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export function Footer() {
   const year = new Date().getFullYear();
 
@@ -13,30 +15,42 @@ export function Footer() {
           </div>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-            <a
-              href="#galeria"
+            <Link
+              href="/#galeria"
               className="text-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
             >
               Galería
-            </a>
-            <a
-              href="#sobre"
+            </Link>
+            <Link
+              href="/sobre"
               className="text-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
             >
               Sobre nosotros
-            </a>
-            <a
-              href="#miembros"
+            </Link>
+            <Link
+              href="/manuales"
+              className="text-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+            >
+              Manuales
+            </Link>
+            <Link
+              href="/miembros"
               className="text-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
             >
               Miembros
-            </a>
-            <a
-              href="#unete"
+            </Link>
+            <Link
+              href="/asistencias"
+              className="text-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+            >
+              Asistencias
+            </Link>
+            <Link
+              href="/unete"
               className="text-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
             >
               Únete
-            </a>
+            </Link>
           </div>
         </div>
 

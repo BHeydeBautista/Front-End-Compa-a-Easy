@@ -16,7 +16,7 @@ function clampIndex(index: number, length: number) {
 }
 
 export function HeroCarousel() {
-  const heroVideoSrc = process.env.NEXT_PUBLIC_HERO_VIDEO_SRC;
+  const heroVideoSrc = process.env.NEXT_PUBLIC_HERO_VIDEO_SRC ?? "/video/trailer.mp4";
   const slides: Slide[] = useMemo(
     () => [
       {
@@ -92,18 +92,16 @@ export function HeroCarousel() {
       aria-label="Presentación"
     >
       <div className="relative">
-        {heroVideoSrc ? (
-          <video
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-            src={heroVideoSrc}
-            autoPlay={!reducedMotion}
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            aria-hidden="true"
-          />
-        ) : null}
+        <video
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          src={heroVideoSrc}
+          autoPlay={!reducedMotion}
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          aria-hidden="true"
+        />
         <div
           className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/75 via-background/35 to-background/80"
           aria-hidden="true"

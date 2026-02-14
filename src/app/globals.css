@@ -3,11 +3,16 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --reserve: #dc2626;
+  --leader-rgb: 212 175 55;
+  --leader: rgb(var(--leader-rgb));
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-reserve: var(--reserve);
+  --color-leader: var(--leader);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -16,6 +21,9 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --reserve: #ef4444;
+    --leader-rgb: 251 191 36;
+    --leader: rgb(var(--leader-rgb));
   }
 }
 

@@ -2,6 +2,18 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+### Auth (Credentials + Google OAuth)
+
+Este proyecto usa `next-auth`.
+
+1) Crea tu archivo `.env.local` basado en `.env.example`.
+
+2) Para Google OAuth, configura en Google Cloud Console el **Authorized redirect URI**:
+
+- `http://localhost:3000/api/auth/callback/google`
+
+3) Levanta el proyecto con `npm run dev` y entra a `/unete` para ver el botón de Google.
+
 First, run the development server:
 
 ```bash

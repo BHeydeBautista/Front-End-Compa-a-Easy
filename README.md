@@ -2,6 +2,14 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+### Frontend + Backend (Nest)
+
+Este frontend se comunica con el backend Nest vía `AUTH_BACKEND_URL`.
+
+1) Levanta el backend en `http://localhost:3001` (ver `backend/.env.example`).
+2) Crea tu archivo `.env.local` basado en `.env.example`.
+3) Levanta el frontend con `npm run dev`.
+
 ### Auth (Credentials + Google OAuth)
 
 Este proyecto usa `next-auth`.

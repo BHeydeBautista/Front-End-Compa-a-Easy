@@ -15,7 +15,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const baseUrl = process.env.AUTH_BACKEND_URL;
+    const baseUrl =
+      process.env.AUTH_BACKEND_URL ??
+      (process.env.NODE_ENV !== "production"
+        ? "http://localhost:3001"
+        : undefined);
     if (!baseUrl) {
       return NextResponse.json(
         { message: "AUTH_BACKEND_URL is not configured" },

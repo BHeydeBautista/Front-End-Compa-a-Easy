@@ -1,8 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 
-const backendBaseUrl = process.env.AUTH_BACKEND_URL;
+const backendBaseUrl =
+  process.env.AUTH_BACKEND_URL ??
+  (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : undefined);
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 

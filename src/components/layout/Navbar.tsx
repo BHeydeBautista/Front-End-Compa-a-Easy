@@ -4,7 +4,7 @@ import NavbarFlow from "@/components/ui/navbar-flow";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 
 function getInitials(value: string) {
   const cleaned = value.trim();
@@ -19,6 +19,11 @@ export function Navbar() {
   const { data: session, status } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+
+  const onLogout = async () => {
+    setMenuOpen(false);
+    window.location.href = "/api/auth/logout";
+  };
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -48,6 +53,11 @@ export function Navbar() {
     (session?.user as any)?.role ??
     (session?.user as any)?.rol ??
     "Sin rango";
+
+  const role = String(
+    (session?.user as any)?.role ?? (session?.user as any)?.rol ?? "",
+  ).toLowerCase();
+  const isSuperAdmin = role === "super_admin";
 
   const avatarUrl = (session?.user as any)?.image as string | undefined;
   const initials = useMemo(() => getInitials(String(displayName)), [displayName]);
@@ -116,8 +126,18 @@ export function Navbar() {
                 role="menu"
                 className="absolute right-0 mt-2 w-52 overflow-hidden rounded-2xl border border-foreground/10 bg-background shadow-sm"
               >
+                {isSuperAdmin ? (
+                  <Link
+                    href="/dashboard/admin"
+                    role="menuitem"
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5"
+                  >
+                    Dashboard Admin
+                  </Link>
+                ) : null}
                 <Link
-                  href="/usuario/ajustes"
+                  href="/dashboard"
                   role="menuitem"
                   onClick={() => setMenuOpen(false)}
                   className="block px-4 py-3 text-sm text-foreground transition-colors hover:bg-foreground/5"
@@ -127,7 +147,7 @@ export function Navbar() {
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => signOut({ callbackUrl: "/" })}
+                  onClick={onLogout}
                   className="w-full text-left px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5"
                 >
                   Cerrar sesión

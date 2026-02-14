@@ -7,6 +7,7 @@ export function Navbar() {
     { text: "Inicio", url: "/" },
     { text: "Galería", url: "/#galeria" },
     { text: "Sobre nosotros", url: "/sobre" },
+    { text: "Reglas", url: "/reglas" },
     { text: "Miembros", url: "/miembros" },
   ];
 

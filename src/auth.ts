@@ -1,39 +1,24 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import GoogleProvider from "next-auth/providers/google";
 
 const backendBaseUrl =
   process.env.AUTH_BACKEND_URL ??
   (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : undefined);
-const googleClientId = process.env.GOOGLE_CLIENT_ID;
-const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
 type BackendLoginResponse = {
-  user?: {
-    id?: string | number;
-    name?: string;
-    email?: string;
-    image?: string;
+  token: string;
+  user: {
+    id: number | string;
+    name: string;
+    email: string;
     role?: string;
-    rol?: string;
   };
-  token?: string;
-  accessToken?: string;
-  refreshToken?: string;
 };
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
   providers: [
-    ...(googleClientId && googleClientSecret
-      ? [
-          GoogleProvider({
-            clientId: googleClientId,
-            clientSecret: googleClientSecret,
-          }),
-        ]
-      : []),
     CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -57,19 +42,15 @@ export const authOptions: NextAuthOptions = {
         if (!response.ok) return null;
 
         const json = (await response.json()) as BackendLoginResponse;
-        const user = json.user;
-        const accessToken = json.accessToken ?? json.token;
-
-        if (!user) return null;
+        if (!json?.token || !json?.user) return null;
 
         return {
-          id: String(user.id ?? user.email ?? email),
-          name: user.name ?? user.email ?? email,
-          email: user.email ?? email,
-          role: user.role ?? user.rol,
-          accessToken,
-          refreshToken: json.refreshToken,
-        };
+          id: String(json.user.id),
+          name: json.user.name,
+          email: json.user.email,
+          role: json.user.role,
+          accessToken: json.token,
+        } as any;
       },
     }),
   ],
@@ -83,19 +64,17 @@ export const authOptions: NextAuthOptions = {
           id: (user as any).id,
           name: (user as any).name,
           email: (user as any).email,
-          image: (user as any).image,
           role: (user as any).role,
         };
         token.accessToken = (user as any).accessToken;
-        token.refreshToken = (user as any).refreshToken;
       }
       return token;
     },
     async session({ session, token }) {
       (session as any).user = (token as any).user ?? session.user;
       (session as any).accessToken = (token as any).accessToken;
-      (session as any).refreshToken = (token as any).refreshToken;
       return session;
     },
   },
+  secret: process.env.NEXTAUTH_SECRET,
 };

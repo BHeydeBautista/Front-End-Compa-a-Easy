@@ -1,61 +1,70 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-function setDeleteCookie(
+const EXPIRED_DATE = "Thu, 01 Jan 1970 00:00:00 GMT";
+
+function appendDeleteCookie(
   res: NextResponse,
   name: string,
   options: {
     path: string;
-    secure: boolean;
     domain?: string;
+    secure?: boolean;
   },
 ) {
-  res.cookies.set(name, "", {
-    path: options.path,
-    domain: options.domain,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: options.secure,
-    maxAge: 0,
-    expires: new Date(0),
-  });
+  const parts: string[] = [`${name}=`];
+  parts.push(`Path=${options.path}`);
+  parts.push(`Expires=${EXPIRED_DATE}`);
+  parts.push("Max-Age=0");
+  parts.push("HttpOnly");
+  parts.push("SameSite=Lax");
+  if (options.secure) parts.push("Secure");
+  if (options.domain) parts.push(`Domain=${options.domain}`);
+  res.headers.append("Set-Cookie", parts.join("; "));
 }
 
-function clearCookie(
-  res: NextResponse,
-  name: string,
-  options: { secure: boolean; allowApiAuthPath: boolean; domains: Array<string | undefined> },
-) {
-  for (const domain of options.domains) {
-    // Always try to clear on '/'
-    setDeleteCookie(res, name, { path: "/", secure: options.secure, domain });
-
-    // Some NextAuth cookies can be scoped under '/api/auth'. Clearing both makes logout more reliable.
-    if (options.allowApiAuthPath) {
-      setDeleteCookie(res, name, { path: "/api/auth", secure: options.secure, domain });
-    }
-  }
+function isIpHost(hostname: string) {
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)) return true;
+  if (hostname.includes(":")) return true;
+  return false;
 }
 
-function clearAuthCookies(req: NextRequest, res: NextResponse) {
-  const secure =
-    process.env.NODE_ENV === "production" || req.nextUrl.protocol === "https:";
+function clearNextAuthCookies(req: NextRequest, res: NextResponse) {
+  const isSecureRequest =
+    req.nextUrl.protocol === "https:" ||
+    req.headers.get("x-forwarded-proto") === "https";
 
   const hostname = req.nextUrl.hostname;
-  const domains: Array<string | undefined> = [undefined];
-  if (hostname && hostname !== "localhost") {
-    domains.push(hostname);
-  } else if (hostname === "localhost") {
-    // Some setups explicitly set Domain=localhost. Clearing both host-only and domain cookies is safer.
-    domains.push("localhost");
+  const domains = new Set<string | undefined>([undefined]);
+
+  if (hostname === "localhost") {
+    domains.add("localhost");
+  } else if (hostname && !isIpHost(hostname)) {
+    domains.add(hostname);
+    domains.add(`.${hostname}`);
+
+    const parts = hostname.split(".").filter(Boolean);
+    if (parts.length > 2) {
+      const parent = parts.slice(-2).join(".");
+      domains.add(parent);
+      domains.add(`.${parent}`);
+    }
   }
 
-  const namesToClear = new Set<string>();
+  const paths = [
+    "/",
+    "/api",
+    "/api/auth",
+    "/api/auth/",
+    "/dashboard",
+    "/dashboard/admin",
+    "/usuario",
+  ];
 
-  // Common NextAuth cookies (plus a few that can appear in OAuth flows)
-  const commonNames = [
+  const namesToClear = new Set<string>([
     "next-auth.session-token",
     "__Secure-next-auth.session-token",
+    "__Host-next-auth.session-token",
     "next-auth.csrf-token",
     "__Host-next-auth.csrf-token",
     "next-auth.callback-url",
@@ -64,51 +73,46 @@ function clearAuthCookies(req: NextRequest, res: NextResponse) {
     "next-auth.state",
     "next-auth.nonce",
     "next-auth.error",
-  ];
-  for (const n of commonNames) namesToClear.add(n);
+  ]);
 
-  // Chunked session cookie variants (JWTs can exceed size and be split)
-  for (let i = 0; i < 10; i += 1) {
+  // Chunked cookies for large JWTs.
+  for (let i = 0; i < 50; i += 1) {
     namesToClear.add(`next-auth.session-token.${i}`);
     namesToClear.add(`__Secure-next-auth.session-token.${i}`);
+    namesToClear.add(`__Host-next-auth.session-token.${i}`);
   }
 
-  // Delete any NextAuth-related cookies we find (including chunked variants).
+  // Also clear any next-auth cookie we see.
   for (const { name } of req.cookies.getAll()) {
-    const isNextAuthCookie =
+    if (
       name === "next-auth.session-token" ||
       name === "__Secure-next-auth.session-token" ||
+      name === "__Host-next-auth.session-token" ||
       name === "next-auth.csrf-token" ||
       name === "__Host-next-auth.csrf-token" ||
       name === "next-auth.callback-url" ||
       name === "__Secure-next-auth.callback-url" ||
       name.startsWith("next-auth.") ||
       name.startsWith("__Secure-next-auth.") ||
-      name.startsWith("__Host-next-auth.");
-
-    if (!isNextAuthCookie) continue;
-
-    namesToClear.add(name);
+      name.startsWith("__Host-next-auth.")
+    ) {
+      namesToClear.add(name);
+    }
   }
 
   for (const name of namesToClear) {
-    const isHostCookie = name.startsWith("__Host-");
-
-    // '__Host-' cookies must be path='/' (and are always secure); don't try '/api/auth' path.
-    clearCookie(res, name, {
-      secure: isHostCookie ? true : secure,
-      allowApiAuthPath: !isHostCookie,
-      domains: isHostCookie ? [undefined] : domains,
-    });
+    for (const domain of domains) {
+      for (const path of paths) {
+        // __Host- cookies are always host-only and must be Path=/
+        if (name.startsWith("__Host-") && (domain !== undefined || path !== "/")) continue;
+        appendDeleteCookie(res, name, { domain, path, secure: isSecureRequest });
+      }
+    }
   }
 }
 
-export async function GET(req: NextRequest) {
-  const res = NextResponse.redirect(new URL("/", req.url));
-  clearAuthCookies(req, res);
-  return res;
-}
-
 export async function POST(req: NextRequest) {
-  return GET(req);
+  const res = NextResponse.json({ ok: true });
+  clearNextAuthCookies(req, res);
+  return res;
 }

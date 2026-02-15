@@ -1,17 +1,27 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import NavbarFlow from "@/components/ui/navbar-flow";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
+
+function withTimeout<T>(promise: Promise<T>, ms: number) {
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) => {
+      setTimeout(() => reject(new Error("timeout")), ms);
+    }),
+  ]);
+}
 
 function getInitials(value: string) {
   const cleaned = value.trim();
   if (!cleaned) return "?";
   const parts = cleaned.split(/\s+/).filter(Boolean);
   const first = parts[0]?.[0] ?? "";
-  const second = (parts[1]?.[0] ?? parts[0]?.[1] ?? "");
+  const second = parts[1]?.[0] ?? parts[0]?.[1] ?? "";
   return (first + second).toUpperCase();
 }
 
@@ -19,11 +29,6 @@ export function Navbar() {
   const { data: session, status } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
-
-  const onLogout = async () => {
-    setMenuOpen(false);
-    window.location.href = "/api/auth/logout";
-  };
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -46,22 +51,11 @@ export function Navbar() {
     { text: "Miembros", url: "/miembros" },
   ];
 
+  const isAuthenticated = status === "authenticated";
   const displayName =
     (session?.user as any)?.name ?? (session?.user as any)?.email ?? "Usuario";
-
-  const rank =
-    (session?.user as any)?.role ??
-    (session?.user as any)?.rol ??
-    "Sin rango";
-
-  const role = String(
-    (session?.user as any)?.role ?? (session?.user as any)?.rol ?? "",
-  ).toLowerCase();
-  const isSuperAdmin = role === "super_admin";
-
-  const avatarUrl = (session?.user as any)?.image as string | undefined;
+  const role = (session?.user as any)?.role as string | undefined;
   const initials = useMemo(() => getInitials(String(displayName)), [displayName]);
-  const isAuthenticated = status === "authenticated";
 
   return (
     <NavbarFlow
@@ -89,7 +83,13 @@ export function Navbar() {
       links={links}
       rightComponent={
         isAuthenticated ? (
-          <div ref={menuRef} className="relative">
+          <div
+            ref={menuRef}
+            className="relative"
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
+          >
             <button
               type="button"
               onClick={() => setMenuOpen((prev) => !prev)}
@@ -98,46 +98,24 @@ export function Navbar() {
               aria-expanded={menuOpen}
             >
               <span className="relative h-9 w-9 overflow-hidden rounded-full border border-foreground/10 bg-foreground/5 grid place-items-center">
-                {avatarUrl ? (
-                  <Image
-                    src={avatarUrl}
-                    alt={displayName}
-                    fill
-                    sizes="36px"
-                    className="object-cover"
-                  />
-                ) : (
-                  <span className="text-xs font-semibold text-foreground/80">
-                    {initials}
-                  </span>
-                )}
+                <span className="text-xs font-semibold text-foreground/80">{initials}</span>
               </span>
 
               <span className="hidden sm:flex flex-col leading-tight">
-                <span className="text-sm font-semibold text-foreground">
-                  {displayName}
-                </span>
-                <span className="text-xs text-foreground/60">{rank}</span>
+                <span className="text-sm font-semibold text-foreground">{displayName}</span>
+                <span className="text-xs text-foreground/60">{role ?? ""}</span>
               </span>
             </button>
 
             {menuOpen ? (
               <div
                 role="menu"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
                 className="absolute right-0 mt-2 w-52 overflow-hidden rounded-2xl border border-foreground/10 bg-background shadow-sm"
               >
-                {isSuperAdmin ? (
-                  <Link
-                    href="/dashboard/admin"
-                    role="menuitem"
-                    onClick={() => setMenuOpen(false)}
-                    className="block px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5"
-                  >
-                    Dashboard Admin
-                  </Link>
-                ) : null}
                 <Link
-                  href="/dashboard"
+                  href="/usuario/ajustes"
                   role="menuitem"
                   onClick={() => setMenuOpen(false)}
                   className="block px-4 py-3 text-sm text-foreground transition-colors hover:bg-foreground/5"
@@ -147,8 +125,32 @@ export function Navbar() {
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={onLogout}
-                  className="w-full text-left px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5"
+                  onClick={async () => {
+                    setMenuOpen(false);
+
+                    try {
+                      await withTimeout(signOut({ redirect: false }), 2500);
+                    } catch {
+                      // ignore
+                    }
+
+                    try {
+                      await withTimeout(
+                        fetch("/api/auth/logout", {
+                          method: "POST",
+                          credentials: "include",
+                          cache: "no-store",
+                          keepalive: true,
+                        }),
+                        2500,
+                      );
+                    } catch {
+                      // ignore
+                    }
+
+                    window.location.assign("/");
+                  }}
+                  className="block w-full cursor-pointer text-left px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5"
                 >
                   Cerrar sesión
                 </button>
@@ -158,7 +160,7 @@ export function Navbar() {
         ) : (
           <a
             href="/unete"
-            className='inline-flex h-10 items-center justify-center rounded-full bg-foreground px-4 text-sm font-semibold text-background transition-colors hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20'
+            className="inline-flex h-10 items-center justify-center rounded-full bg-foreground px-4 text-sm font-semibold text-background transition-colors hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
           >
             Únete
           </a>

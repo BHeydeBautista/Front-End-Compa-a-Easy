@@ -1,7 +1,7 @@
 "use client";
 
-import Login4 from "@/components/auth/Login4";
 import { useRouter } from "next/navigation";
+import { LoginForm } from "@/components/auth/LoginForm";
 
 export default function UnetePage() {
   const router = useRouter();
@@ -17,7 +17,9 @@ export default function UnetePage() {
           Volver atrás
         </button>
       </div>
-      <Login4 />
+      <div className="px-6 py-24">
+        <LoginForm />
+      </div>
     </div>
   );
 }

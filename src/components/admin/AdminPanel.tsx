@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useSession } from "next-auth/react";
 
 type User = {
   id: number;
@@ -76,13 +75,13 @@ async function apiFetch<T>(
   return (await res.json()) as T;
 }
 
-export function AdminPanel({ backendBaseUrl }: { backendBaseUrl: string }) {
-  const { data: session } = useSession();
-  const accessToken = (
-    session as unknown as {
-      accessToken?: string;
-    }
-  )?.accessToken;
+export function AdminPanel({
+  backendBaseUrl,
+  accessToken,
+}: {
+  backendBaseUrl: string;
+  accessToken?: string;
+}) {
 
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);

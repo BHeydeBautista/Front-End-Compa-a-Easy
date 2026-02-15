@@ -1,5 +1,5 @@
-import Signin1 from "@/components/auth/Signin1";
+import { redirect } from "next/navigation";
 
 export default function RegisterPage() {
-  return <Signin1 />;
+  redirect("/unete");
 }

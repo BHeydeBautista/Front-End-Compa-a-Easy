@@ -1,5 +1,9 @@
-import { redirect } from "next/navigation";
+import { RegisterForm } from "@/components/auth/RegisterForm";
 
 export default function RegisterPage() {
-  redirect("/unete");
+  return (
+    <div className="px-6 py-24">
+      <RegisterForm />
+    </div>
+  );
 }

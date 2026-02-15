@@ -1,19 +1,14 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 
 function GoogleIcon(props: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 48 48"
-      aria-hidden="true"
-      className={props.className}
-      focusable="false"
-    >
+    <svg viewBox="0 0 48 48" aria-hidden="true" className={props.className} focusable="false">
       <path
         fill="#FFC107"
         d="M43.611 20.083H42V20H24v8h11.303C33.559 32.66 29.149 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.281 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"
@@ -34,12 +29,12 @@ function GoogleIcon(props: { className?: string }) {
   );
 }
 
-export function LoginForm() {
+export function RegisterForm() {
   const router = useRouter();
+  const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
-  const [remember, setRemember] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -50,29 +45,41 @@ export function LoginForm() {
         setError(null);
         setBusy(true);
         try {
-          const res = await signIn("credentials", {
+          const res = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, email, password }),
+            cache: "no-store",
+          });
+
+          if (!res.ok) {
+            setError("No se pudo crear la cuenta");
+            return;
+          }
+
+          const signInRes = await signIn("credentials", {
             email,
             password,
             redirect: false,
           });
 
-          if (res?.error) {
-            setError("Correo o contraseña incorrectos");
+          if (signInRes?.error) {
+            setError("Cuenta creada, pero no se pudo iniciar sesión");
             return;
           }
 
           router.push("/dashboard");
           router.refresh();
         } catch {
-          setError("No se pudo iniciar sesión");
+          setError("No se pudo crear la cuenta");
         } finally {
           setBusy(false);
         }
       }}
       className="mx-auto w-full max-w-md rounded-2xl border border-foreground/10 bg-background p-6"
     >
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Inicio de Sesión</h1>
-      <p className="mt-2 text-sm text-foreground/70">Acceda a su cuenta segura</p>
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Crear Cuenta</h1>
+      <p className="mt-2 text-sm text-foreground/70">Regístrese para acceder a su cuenta segura</p>
 
       <div className="mt-6 space-y-3">
         <button
@@ -81,30 +88,30 @@ export function LoginForm() {
           className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-foreground/10 bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
         >
           <GoogleIcon className="h-5 w-5" />
-          Iniciar sesión con Google
-        </button>
-
-        <button
-          type="button"
-          disabled
-          aria-disabled="true"
-          className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-foreground/10 bg-background px-4 text-sm font-semibold text-foreground/50"
-          title="Próximamente"
-        >
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-sm border border-foreground/10 text-[11px] font-extrabold">
-            X
-          </span>
-          Iniciar sesión con Twitter
+          Registrarse con Google
         </button>
       </div>
 
       <div className="mt-6 flex items-center gap-3">
         <div className="h-px flex-1 bg-foreground/10" />
-        <p className="text-xs text-foreground/60">O inicia sesión con correo electrónico</p>
+        <p className="text-xs text-foreground/60">O crea tu cuenta con correo electrónico</p>
         <div className="h-px flex-1 bg-foreground/10" />
       </div>
 
       <div className="mt-6 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-2">Nombre</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            type="text"
+            autoComplete="name"
+            className="block w-full rounded-xl border border-foreground/10 bg-background px-3 py-3 text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
+            placeholder="Tu nombre"
+            required
+          />
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">Correo Electrónico</label>
           <input
@@ -125,7 +132,7 @@ export function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
+              autoComplete="new-password"
               className="block w-full rounded-xl border border-foreground/10 bg-background px-3 py-3 pr-10 text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
               placeholder="Enter your password"
               required
@@ -141,22 +148,6 @@ export function LoginForm() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-4">
-          <label className="inline-flex items-center gap-2 text-sm text-foreground/70">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              className="h-4 w-4 rounded border border-foreground/20"
-            />
-            Mantenerme conectado
-          </label>
-
-          <a href="#" className="text-sm font-semibold text-emerald-600 hover:underline" onClick={(e) => e.preventDefault()}>
-            Restablecer contraseña
-          </a>
-        </div>
-
         {error ? (
           <div className="rounded-xl border border-foreground/10 bg-foreground/5 px-4 py-3 text-sm text-foreground">
             {error}
@@ -168,13 +159,13 @@ export function LoginForm() {
           disabled={busy}
           className="inline-flex h-11 w-full items-center justify-center rounded-full bg-foreground px-4 text-sm font-semibold text-background transition-colors hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:opacity-60"
         >
-          {busy ? "Ingresando..." : "Inicia sesión en tu cuenta"}
+          {busy ? "Creando..." : "Crear cuenta"}
         </button>
 
         <p className="pt-2 text-center text-sm text-foreground/70">
-          ¿Eres nuevo en nuestra plataforma?{" "}
-          <Link href="/auth/register" className="font-semibold text-foreground hover:underline">
-            Crear Cuenta
+          ¿Ya tienes una cuenta?{" "}
+          <Link href="/unete" className="font-semibold text-foreground hover:underline">
+            Iniciar sesión
           </Link>
         </p>
       </div>

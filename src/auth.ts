@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 
 const backendBaseUrl =
   process.env.AUTH_BACKEND_URL ??
@@ -53,12 +54,23 @@ export const authOptions: NextAuthOptions = {
         } as any;
       },
     }),
+    ...(() => {
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+      if (!clientId || !clientSecret) return [];
+      return [
+        GoogleProvider({
+          clientId,
+          clientSecret,
+        }),
+      ];
+    })(),
   ],
   pages: {
     signIn: "/unete",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.user = {
           id: (user as any).id,
@@ -68,6 +80,39 @@ export const authOptions: NextAuthOptions = {
         };
         token.accessToken = (user as any).accessToken;
       }
+
+      if (
+        account?.provider === "google" &&
+        typeof (account as any).id_token === "string" &&
+        (account as any).id_token.length > 0
+      ) {
+        if (!backendBaseUrl) return token;
+
+        try {
+          const response = await fetch(`${backendBaseUrl}/auth/google`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ idToken: (account as any).id_token }),
+            cache: "no-store",
+          });
+
+          if (response.ok) {
+            const json = (await response.json()) as BackendLoginResponse;
+            if (json?.token && json?.user) {
+              token.user = {
+                id: String(json.user.id),
+                name: json.user.name,
+                email: json.user.email,
+                role: json.user.role,
+              };
+              token.accessToken = json.token;
+            }
+          }
+        } catch {
+          // ignore: keep the session without backend token
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {

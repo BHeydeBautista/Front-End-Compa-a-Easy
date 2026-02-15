@@ -1,30 +1,21 @@
 "use client";
 
 import * as React from "react";
+import { cn } from "@/lib/utils";
+import { Reveal } from "@/components/ui/Reveal";
+import { Progress } from "@/components/ui/progress";
+import { motion } from "motion/react";
+
+type UserRole = "super_admin" | "moderator" | "user";
 
 type User = {
   id: number;
   name: string;
   email: string;
-  role: string;
+  role: UserRole;
   rankId?: number | null;
   rank?: { id: number; name: string } | null;
-  category?: string | null;
-  division?: string | null;
-  steamName?: string | null;
-  whatsappName?: string | null;
-  phoneNumber?: string | null;
-  discord?: string | null;
   deletedAt?: string | null;
-};
-
-type Course = {
-  id: number;
-  code: string;
-  name: string;
-  description?: string | null;
-  type?: string | null;
-  requiresAllPreviousAscenso?: boolean;
 };
 
 type Rank = {
@@ -33,27 +24,24 @@ type Rank = {
   sortOrder: number;
 };
 
+type Course = {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+};
+
 type ApprovedCourseRow = {
   id: number;
   approvedAt: string;
   course: Course;
 };
 
-type UnlockRow = {
-  id: number;
-  course: Course;
-};
-
-type PrerequisiteRow = {
-  id: number;
-  prerequisite: Course;
-};
-
 async function apiFetch<T>(
   url: string,
   opts: {
     accessToken: string;
-    method?: string;
+    method?: "GET" | "POST" | "PATCH" | "DELETE";
     body?: unknown;
   },
 ): Promise<T> {
@@ -72,7 +60,126 @@ async function apiFetch<T>(
     throw new Error(text || `HTTP ${res.status}`);
   }
 
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
   return (await res.json()) as T;
+}
+
+function Button({
+  className,
+  variant = "default",
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "default" | "subtle";
+}) {
+  return (
+    <button
+      {...props}
+      className={cn(
+        "inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium",
+        "transition-colors duration-200",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        variant === "default"
+          ? "border-foreground/10 bg-background/40 text-foreground backdrop-blur hover:bg-foreground/5"
+          : "border-transparent bg-transparent text-foreground/70 hover:bg-foreground/5 hover:text-foreground",
+        className,
+      )}
+    />
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <label className="text-sm font-medium text-foreground/80">{children}</label>;
+}
+
+function ControlBase({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      {...props}
+      className={cn(
+        "rounded-xl border border-foreground/10 bg-background/20 backdrop-blur",
+        className,
+      )}
+    />
+  );
+}
+
+function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className={cn(
+        "w-full rounded-xl border border-foreground/10 bg-background/20 px-3 py-2 text-sm text-foreground backdrop-blur",
+        "transition-colors duration-200",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        props.className,
+      )}
+    />
+  );
+}
+
+function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={cn(
+        "w-full rounded-xl border border-foreground/10 bg-background/20 px-3 py-2 text-sm text-foreground backdrop-blur",
+        "transition-colors duration-200",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        props.className,
+      )}
+    />
+  );
+}
+
+function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...props}
+      className={cn(
+        "w-full rounded-xl border border-foreground/10 bg-background/20 px-3 py-2 text-sm text-foreground backdrop-blur",
+        "transition-colors duration-200",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        props.className,
+      )}
+    />
+  );
+}
+
+function Card({
+  children,
+  className,
+  delay = 0,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
+}) {
+  return (
+    <Reveal delay={delay} className="w-full">
+      <motion.section
+        whileHover={{ y: -2 }}
+        transition={{ duration: 0.18, ease: "easeOut" }}
+        className={cn(
+          "w-full rounded-2xl border border-foreground/10 bg-foreground/5",
+          "shadow-sm",
+          "backdrop-blur",
+          className,
+        )}
+      >
+        <div className="p-5 sm:p-6">{children}</div>
+      </motion.section>
+    </Reveal>
+  );
 }
 
 export function AdminPanel({
@@ -82,65 +189,86 @@ export function AdminPanel({
   backendBaseUrl: string;
   accessToken?: string;
 }) {
-
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const [users, setUsers] = React.useState<User[]>([]);
-  const [courses, setCourses] = React.useState<Course[]>([]);
   const [ranks, setRanks] = React.useState<Rank[]>([]);
+  const [courses, setCourses] = React.useState<Course[]>([]);
 
   const [selectedUserId, setSelectedUserId] = React.useState<number | null>(null);
+
   const [selectedCourseId, setSelectedCourseId] = React.useState<number | null>(null);
   const [selectedRankId, setSelectedRankId] = React.useState<number | null>(null);
 
-  const selectedUser = users.find((u) => u.id === selectedUserId) ?? null;
-  const selectedCourse = courses.find((c) => c.id === selectedCourseId) ?? null;
-  const selectedRank = ranks.find((r) => r.id === selectedRankId) ?? null;
+  const selectedCourse = React.useMemo(
+    () => courses.find((c) => c.id === selectedCourseId) ?? null,
+    [courses, selectedCourseId],
+  );
 
-  const [userPatch, setUserPatch] = React.useState<Partial<User>>({});
+  const selectedRank = React.useMemo(
+    () => ranks.find((r) => r.id === selectedRankId) ?? null,
+    [ranks, selectedRankId],
+  );
 
-  const [coursePatch, setCoursePatch] = React.useState<Partial<Course>>({});
-  const [rankPatch, setRankPatch] = React.useState<Partial<Rank>>({});
+  const selectedUser = React.useMemo(
+    () => users.find((u) => u.id === selectedUserId) ?? null,
+    [users, selectedUserId],
+  );
 
-  const [approved, setApproved] = React.useState<ApprovedCourseRow[]>([]);
-  const [available, setAvailable] = React.useState<Course[]>([]);
+  const [roleDraft, setRoleDraft] = React.useState<UserRole | "">("");
+  const [rankIdDraft, setRankIdDraft] = React.useState<number | "" | null>("");
 
-  const [prereqs, setPrereqs] = React.useState<PrerequisiteRow[]>([]);
-  const [prereqToAddId, setPrereqToAddId] = React.useState<number | null>(null);
+  const [approvedRows, setApprovedRows] = React.useState<ApprovedCourseRow[]>([]);
+  const approvedCourseIds = React.useMemo(() => {
+    return new Set(
+      approvedRows
+        .map((r) => r.course?.id)
+        .filter((id): id is number => typeof id === "number"),
+    );
+  }, [approvedRows]);
 
-  const [unlocks, setUnlocks] = React.useState<UnlockRow[]>([]);
-  const [unlockToAddCourseId, setUnlockToAddCourseId] = React.useState<number | null>(null);
+  const [courseToToggleId, setCourseToToggleId] = React.useState<number | "">("");
 
-  const [newCourse, setNewCourse] = React.useState<Partial<Course>>({
-    code: "",
-    name: "",
-    type: null,
-    requiresAllPreviousAscenso: false,
-  });
+  const [courseEdit, setCourseEdit] = React.useState<{ code: string; name: string; description: string }>(
+    { code: "", name: "", description: "" },
+  );
+  const [courseNew, setCourseNew] = React.useState<{ code: string; name: string; description: string }>(
+    { code: "", name: "", description: "" },
+  );
 
-  const [newRank, setNewRank] = React.useState<Partial<Rank>>({
-    name: "",
-    sortOrder: 0,
-  });
+  const [rankEdit, setRankEdit] = React.useState<{ name: string; sortOrder: string }>(
+    { name: "", sortOrder: "0" },
+  );
+  const [rankNew, setRankNew] = React.useState<{ name: string; sortOrder: string }>(
+    { name: "", sortOrder: "0" },
+  );
 
   const loadBase = React.useCallback(async () => {
     if (!accessToken) return;
     setError(null);
     setBusy(true);
     try {
-      const [u, c, r] = await Promise.all([
+      const [u, r, c] = await Promise.all([
         apiFetch<User[]>(`${backendBaseUrl}/users?includeDeleted=true`, { accessToken }),
-        apiFetch<Course[]>(`${backendBaseUrl}/courses`, { accessToken }),
         apiFetch<Rank[]>(`${backendBaseUrl}/ranks`, { accessToken }),
+        apiFetch<Course[]>(`${backendBaseUrl}/courses`, { accessToken }),
       ]);
       setUsers(u);
-      setCourses(c);
       setRanks(r);
+      setCourses(c);
 
-      if (u.length && selectedUserId == null) setSelectedUserId(u[0].id);
-      if (c.length && selectedCourseId == null) setSelectedCourseId(c[0].id);
-      if (r.length && selectedRankId == null) setSelectedRankId(r[0].id);
+      if (u.length && selectedUserId == null) {
+        setSelectedUserId(u[0].id);
+      }
+
+      if (c.length && selectedCourseId == null) {
+        setSelectedCourseId(c[0].id);
+      }
+
+      if (r.length && selectedRankId == null) {
+        setSelectedRankId(r[0].id);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -148,91 +276,19 @@ export function AdminPanel({
     }
   }, [accessToken, backendBaseUrl, selectedUserId, selectedCourseId, selectedRankId]);
 
-  React.useEffect(() => {
-    loadBase();
-  }, [loadBase]);
-
-  const seedRanks = React.useCallback(async () => {
-    if (!accessToken) return;
-    setError(null);
-    setBusy(true);
-    try {
-      // Source: Frontend About -> RankTables
-      const ranksToSeed: Array<{ name: string; sortOrder: number }> = [
-        { name: "Coronel", sortOrder: 15 },
-        { name: "Teniente Coronel", sortOrder: 14 },
-        { name: "Mayor", sortOrder: 13 },
-        { name: "Capitán", sortOrder: 12 },
-        { name: "Comandante del Aire", sortOrder: 12 },
-
-        { name: "Teniente Primero", sortOrder: 11 },
-        { name: "Teniente Segundo", sortOrder: 10 },
-        { name: "Sargento Mayor", sortOrder: 9 },
-        { name: "Sargento Maestro", sortOrder: 8 },
-        { name: "Sargento Primero", sortOrder: 7 },
-        { name: "Sargento", sortOrder: 6 },
-        { name: "Cabo Primero", sortOrder: 5 },
-        { name: "Cabo", sortOrder: 4 },
-        { name: "Soldado de Primera", sortOrder: 3 },
-        { name: "Soldado", sortOrder: 2 },
-        { name: "Recluta", sortOrder: 1 },
-        { name: "Aspirante", sortOrder: 0 },
-
-        { name: "Primer Teniente", sortOrder: 11 },
-        { name: "Teniente Piloto", sortOrder: 10 },
-        { name: "Sargento Técnico", sortOrder: 7 },
-        { name: "Sargento de Personal", sortOrder: 6 },
-        { name: "Piloto Primero", sortOrder: 5 },
-        { name: "Piloto", sortOrder: 4 },
-        { name: "Cadete de Primera", sortOrder: 3 },
-        { name: "Cadete", sortOrder: 2 },
-      ];
-
-      await apiFetch(`${backendBaseUrl}/ranks/bulk`, {
-        accessToken,
-        method: "POST",
-        body: { ranks: ranksToSeed },
-      });
-
-      await loadBase();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
+  const loadApproved = React.useCallback(async () => {
+    if (!accessToken || !selectedUserId) {
+      setApprovedRows([]);
+      return;
     }
-  }, [accessToken, backendBaseUrl, loadBase]);
-
-  React.useEffect(() => {
-    setUserPatch({});
-  }, [selectedUserId]);
-
-  React.useEffect(() => {
-    setCoursePatch({});
-    setPrereqToAddId(null);
-  }, [selectedCourseId]);
-
-  React.useEffect(() => {
-    setRankPatch({});
-    setUnlockToAddCourseId(null);
-  }, [selectedRankId]);
-
-  const loadUserCourses = React.useCallback(async () => {
-    if (!accessToken || !selectedUserId) return;
     setError(null);
     setBusy(true);
     try {
-      const [a, v] = await Promise.all([
-        apiFetch<ApprovedCourseRow[]>(
-          `${backendBaseUrl}/users/${selectedUserId}/courses/approved`,
-          { accessToken },
-        ),
-        apiFetch<Course[]>(
-          `${backendBaseUrl}/users/${selectedUserId}/courses/available`,
-          { accessToken },
-        ),
-      ]);
-      setApproved(a);
-      setAvailable(v);
+      const rows = await apiFetch<ApprovedCourseRow[]>(
+        `${backendBaseUrl}/users/${selectedUserId}/courses/approved`,
+        { accessToken },
+      );
+      setApprovedRows(rows);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -241,50 +297,49 @@ export function AdminPanel({
   }, [accessToken, backendBaseUrl, selectedUserId]);
 
   React.useEffect(() => {
-    loadUserCourses();
-  }, [loadUserCourses]);
-
-  const loadPrereqs = React.useCallback(async () => {
-    if (!accessToken || !selectedCourseId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      const rows = await apiFetch<PrerequisiteRow[]>(
-        `${backendBaseUrl}/courses/${selectedCourseId}/prerequisites`,
-        { accessToken },
-      );
-      setPrereqs(rows);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }, [accessToken, backendBaseUrl, selectedCourseId]);
+    loadBase();
+  }, [loadBase]);
 
   React.useEffect(() => {
-    loadPrereqs();
-  }, [loadPrereqs]);
-
-  const loadUnlocks = React.useCallback(async () => {
-    if (!accessToken || !selectedRankId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      const rows = await apiFetch<UnlockRow[]>(
-        `${backendBaseUrl}/ranks/${selectedRankId}/unlocks`,
-        { accessToken },
-      );
-      setUnlocks(rows);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
+    if (!selectedUser) {
+      setRoleDraft("");
+      setRankIdDraft("");
+      setCourseToToggleId("");
+      return;
     }
-  }, [accessToken, backendBaseUrl, selectedRankId]);
+    setRoleDraft(selectedUser.role ?? "user");
+    setRankIdDraft(
+      typeof selectedUser.rankId === "number" ? selectedUser.rankId : null,
+    );
+    setCourseToToggleId("");
+  }, [selectedUser]);
 
   React.useEffect(() => {
-    loadUnlocks();
-  }, [loadUnlocks]);
+    if (!selectedCourse) {
+      setCourseEdit({ code: "", name: "", description: "" });
+      return;
+    }
+    setCourseEdit({
+      code: selectedCourse.code ?? "",
+      name: selectedCourse.name ?? "",
+      description: selectedCourse.description ?? "",
+    });
+  }, [selectedCourse]);
+
+  React.useEffect(() => {
+    if (!selectedRank) {
+      setRankEdit({ name: "", sortOrder: "0" });
+      return;
+    }
+    setRankEdit({
+      name: selectedRank.name ?? "",
+      sortOrder: String(selectedRank.sortOrder ?? 0),
+    });
+  }, [selectedRank]);
+
+  React.useEffect(() => {
+    loadApproved();
+  }, [loadApproved]);
 
   if (!accessToken) {
     return (
@@ -294,27 +349,10 @@ export function AdminPanel({
     );
   }
 
-  const onSaveUser = async () => {
+  const onDeactivate = async () => {
     if (!selectedUserId) return;
-    if (Object.keys(userPatch).length === 0) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await apiFetch<User>(`${backendBaseUrl}/users/${selectedUserId}`, {
-        accessToken,
-        method: "PATCH",
-        body: userPatch,
-      });
-      await loadBase();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
+    if (!confirm("¿Dar de baja este usuario?") ) return;
 
-  const onDeactivateUser = async () => {
-    if (!selectedUserId) return;
     setError(null);
     setBusy(true);
     try {
@@ -330,7 +368,7 @@ export function AdminPanel({
     }
   };
 
-  const onRestoreUser = async () => {
+  const onRestore = async () => {
     if (!selectedUserId) return;
     setError(null);
     setBusy(true);
@@ -347,154 +385,19 @@ export function AdminPanel({
     }
   };
 
-  const onApprove = async (courseId: number) => {
-    if (!selectedUserId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await apiFetch(`${backendBaseUrl}/users/${selectedUserId}/courses/approved`, {
-        accessToken,
-        method: "POST",
-        body: { courseId },
-      });
-      await loadUserCourses();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const onSaveRole = async () => {
+    if (!selectedUserId || !selectedUser) return;
+    if (!roleDraft) return;
+    if (roleDraft === selectedUser.role) return;
 
-  const onUnapprove = async (courseId: number) => {
-    if (!selectedUserId) return;
     setError(null);
     setBusy(true);
     try {
-      await apiFetch(`${backendBaseUrl}/users/${selectedUserId}/courses/approved/${courseId}`, {
-        accessToken,
-        method: "DELETE",
-      });
-      await loadUserCourses();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onCreateCourse = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      await apiFetch<Course>(`${backendBaseUrl}/courses`, {
-        accessToken,
-        method: "POST",
-        body: {
-          code: String(newCourse.code ?? "").trim(),
-          name: String(newCourse.name ?? "").trim(),
-          type: newCourse.type ?? null,
-          requiresAllPreviousAscenso: Boolean(newCourse.requiresAllPreviousAscenso),
-          description: newCourse.description ?? null,
-        },
-      });
-      setNewCourse({ code: "", name: "", type: null, requiresAllPreviousAscenso: false });
-      await loadBase();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onSaveCourse = async () => {
-    if (!selectedCourseId) return;
-    if (Object.keys(coursePatch).length === 0) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await apiFetch<Course>(`${backendBaseUrl}/courses/${selectedCourseId}`, {
+      await apiFetch<User>(`${backendBaseUrl}/users/${selectedUserId}`, {
         accessToken,
         method: "PATCH",
-        body: coursePatch,
+        body: { role: roleDraft },
       });
-      setCoursePatch({});
-      await loadBase();
-      await loadPrereqs();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onDeleteCourse = async () => {
-    if (!selectedCourseId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await apiFetch(`${backendBaseUrl}/courses/${selectedCourseId}`, {
-        accessToken,
-        method: "DELETE",
-      });
-      setSelectedCourseId(null);
-      setPrereqs([]);
-      await loadBase();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onAddPrereq = async () => {
-    if (!selectedCourseId || !prereqToAddId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await apiFetch(`${backendBaseUrl}/courses/${selectedCourseId}/prerequisites`, {
-        accessToken,
-        method: "POST",
-        body: { prerequisiteCourseId: prereqToAddId },
-      });
-      setPrereqToAddId(null);
-      await loadPrereqs();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onRemovePrereq = async (prerequisiteCourseId: number) => {
-    if (!selectedCourseId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await apiFetch(
-        `${backendBaseUrl}/courses/${selectedCourseId}/prerequisites/${prerequisiteCourseId}`,
-        { accessToken, method: "DELETE" },
-      );
-      await loadPrereqs();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onCreateRank = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      await apiFetch<Rank>(`${backendBaseUrl}/ranks`, {
-        accessToken,
-        method: "POST",
-        body: {
-          name: String(newRank.name ?? "").trim(),
-          sortOrder: Number(newRank.sortOrder ?? 0),
-        },
-      });
-      setNewRank({ name: "", sortOrder: 0 });
       await loadBase();
     } catch (e) {
       setError((e as Error).message);
@@ -504,74 +407,161 @@ export function AdminPanel({
   };
 
   const onSaveRank = async () => {
-    if (!selectedRankId) return;
-    if (Object.keys(rankPatch).length === 0) return;
+    if (!selectedUserId || !selectedUser) return;
+
+    const current = typeof selectedUser.rankId === "number" ? selectedUser.rankId : null;
+    const next = typeof rankIdDraft === "number" ? rankIdDraft : null;
+    if (current === next) return;
+
+    setError(null);
+    setBusy(true);
+    try {
+      await apiFetch<User>(`${backendBaseUrl}/users/${selectedUserId}`, {
+        accessToken,
+        method: "PATCH",
+        body: { rankId: next },
+      });
+      await loadBase();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onToggleCourse = async () => {
+    if (!selectedUserId) return;
+    if (courseToToggleId === "") return;
+
+    const courseId = Number(courseToToggleId);
+    const isApproved = approvedCourseIds.has(courseId);
+
+    setError(null);
+    setBusy(true);
+    try {
+      if (isApproved) {
+        await apiFetch<{ ok: true }>(
+          `${backendBaseUrl}/users/${selectedUserId}/courses/approved/${courseId}`,
+          { accessToken, method: "DELETE" },
+        );
+      } else {
+        await apiFetch<ApprovedCourseRow>(
+          `${backendBaseUrl}/users/${selectedUserId}/courses/approved`,
+          { accessToken, method: "POST", body: { courseId } },
+        );
+      }
+
+      await loadApproved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onCreateCourse = async () => {
+    const code = courseNew.code.trim();
+    const name = courseNew.name.trim();
+    const description = courseNew.description.trim();
+    if (!code || !name) return;
+
+    setError(null);
+    setBusy(true);
+    try {
+      const created = await apiFetch<Course>(`${backendBaseUrl}/courses`, {
+        accessToken,
+        method: "POST",
+        body: {
+          code,
+          name,
+          description: description || undefined,
+        },
+      });
+
+      setCourseNew({ code: "", name: "", description: "" });
+      await loadBase();
+      setSelectedCourseId(created.id);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onUpdateCourse = async () => {
+    if (!selectedCourseId || !selectedCourse) return;
+    const patch: { code?: string; name?: string; description?: string } = {};
+
+    const code = courseEdit.code.trim();
+    const name = courseEdit.name.trim();
+    const description = courseEdit.description.trim();
+
+    if (code !== selectedCourse.code) patch.code = code;
+    if (name !== selectedCourse.name) patch.name = name;
+    if ((selectedCourse.description ?? "") !== description) patch.description = description || undefined;
+
+    if (Object.keys(patch).length === 0) return;
+
+    setError(null);
+    setBusy(true);
+    try {
+      await apiFetch<Course>(`${backendBaseUrl}/courses/${selectedCourseId}`, {
+        accessToken,
+        method: "PATCH",
+        body: patch,
+      });
+      await loadBase();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onCreateRank = async () => {
+    const name = rankNew.name.trim();
+    const sortOrder = Number(rankNew.sortOrder);
+    if (!name || !Number.isFinite(sortOrder) || sortOrder < 0) return;
+
+    setError(null);
+    setBusy(true);
+    try {
+      const created = await apiFetch<Rank>(`${backendBaseUrl}/ranks`, {
+        accessToken,
+        method: "POST",
+        body: { name, sortOrder },
+      });
+      setRankNew({ name: "", sortOrder: "0" });
+      await loadBase();
+      setSelectedRankId(created.id);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onUpdateRank = async () => {
+    if (!selectedRankId || !selectedRank) return;
+
+    const name = rankEdit.name.trim();
+    const sortOrder = Number(rankEdit.sortOrder);
+    if (!name || !Number.isFinite(sortOrder) || sortOrder < 0) return;
+
+    const patch: Partial<Rank> = {};
+    if (name !== selectedRank.name) patch.name = name;
+    if (sortOrder !== selectedRank.sortOrder) patch.sortOrder = sortOrder;
+    if (Object.keys(patch).length === 0) return;
+
     setError(null);
     setBusy(true);
     try {
       await apiFetch<Rank>(`${backendBaseUrl}/ranks/${selectedRankId}`, {
         accessToken,
         method: "PATCH",
-        body: rankPatch,
+        body: patch,
       });
-      setRankPatch({});
       await loadBase();
-      await loadUnlocks();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onDeleteRank = async () => {
-    if (!selectedRankId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await apiFetch(`${backendBaseUrl}/ranks/${selectedRankId}`, {
-        accessToken,
-        method: "DELETE",
-      });
-      setSelectedRankId(null);
-      setUnlocks([]);
-      await loadBase();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onAddUnlock = async () => {
-    if (!selectedRankId || !unlockToAddCourseId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await apiFetch(`${backendBaseUrl}/ranks/${selectedRankId}/unlocks`, {
-        accessToken,
-        method: "POST",
-        body: { courseId: unlockToAddCourseId },
-      });
-      setUnlockToAddCourseId(null);
-      await loadUnlocks();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onRemoveUnlock = async (courseId: number) => {
-    if (!selectedRankId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await apiFetch(`${backendBaseUrl}/ranks/${selectedRankId}/unlocks/${courseId}`, {
-        accessToken,
-        method: "DELETE",
-      });
-      await loadUnlocks();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -580,583 +570,487 @@ export function AdminPanel({
   };
 
   return (
-    <div className="space-y-8">
-      {error ? (
-        <div className="rounded-2xl border border-foreground/10 bg-background p-4">
-          <p className="text-sm text-red-500">{error}</p>
+    <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+      <Reveal>
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-balance text-3xl font-semibold tracking-tight text-foreground">
+              Panel Admin
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-foreground/70">
+              Usuarios, roles, rangos, cursos aprobados, y administración de cursos/rangos.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="hidden w-44 sm:block" aria-hidden="true">
+              <Progress value={busy ? 70 : 0} variant="slim" className={busy ? "opacity-100" : "opacity-0"} />
+            </div>
+            <Button type="button" onClick={loadBase} disabled={busy}>
+              Recargar
+            </Button>
+          </div>
         </div>
+      </Reveal>
+
+      {error ? (
+        <Card delay={0.05} className="mt-6">
+          <div className="rounded-xl border border-foreground/10 bg-background/30 p-4">
+            <p className="text-sm text-foreground">
+              <span className="font-medium">Error:</span> {error}
+            </p>
+          </div>
+        </Card>
       ) : null}
 
-      <div className="rounded-2xl border border-foreground/10 bg-background p-6">
-        <p className="text-xs font-semibold tracking-[0.30em] text-foreground/60 uppercase">
-          Estado
-        </p>
-        <p className="mt-2 text-sm text-foreground/70">
-          {busy ? "Cargando…" : "Listo"}
-        </p>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-foreground/10 bg-background p-6">
-          <h3 className="text-sm font-semibold tracking-[0.30em] text-foreground uppercase">
-            Usuarios
-          </h3>
-
-          <div className="mt-4 grid gap-4">
-            <label className="grid gap-2">
-              <span className="text-xs font-semibold text-foreground/70">Seleccionar</span>
-              <select
-                className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                value={selectedUserId ?? ""}
-                onChange={(e) => setSelectedUserId(Number(e.target.value))}
-              >
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    #{u.id} {u.name} ({u.email}){u.deletedAt ? " [BAJA]" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {selectedUser ? (
-              <div className="grid gap-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-2">
-                    <span className="text-xs font-semibold text-foreground/70">Nombre</span>
-                    <input
-                      className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                      defaultValue={selectedUser.name}
-                      onChange={(e) => setUserPatch((p) => ({ ...p, name: e.target.value }))}
-                    />
-                  </label>
-
-                  <label className="grid gap-2">
-                    <span className="text-xs font-semibold text-foreground/70">Email</span>
-                    <input
-                      className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                      defaultValue={selectedUser.email}
-                      onChange={(e) => setUserPatch((p) => ({ ...p, email: e.target.value }))}
-                    />
-                  </label>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-2">
-                    <span className="text-xs font-semibold text-foreground/70">Rol</span>
-                    <select
-                      className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                      defaultValue={selectedUser.role}
-                      onChange={(e) => setUserPatch((p) => ({ ...p, role: e.target.value }))}
-                    >
-                      <option value="user">user</option>
-                      <option value="moderator">moderator</option>
-                      <option value="super_admin">super_admin</option>
-                    </select>
-                  </label>
-
-                  <label className="grid gap-2">
-                    <span className="text-xs font-semibold text-foreground/70">Rank ID</span>
-                    <select
-                      className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                      value={
-                        (userPatch.rankId ?? selectedUser.rankId ?? "") as any
-                      }
-                      onChange={(e) =>
-                        setUserPatch((p) => ({
-                          ...p,
-                          rankId: e.target.value ? Number(e.target.value) : null,
-                        }))
-                      }
-                    >
-                      <option value="">(sin rango)</option>
-                      {ranks.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    className="h-10 rounded-xl border border-foreground/10 bg-foreground/5 px-4 text-sm font-semibold"
-                    onClick={onSaveUser}
-                    disabled={busy}
-                  >
-                    Guardar cambios
-                  </button>
-
-                  <button
-                    className="h-10 rounded-xl border border-foreground/10 bg-foreground/5 px-4 text-sm font-semibold"
-                    onClick={onDeactivateUser}
-                    disabled={busy}
-                  >
-                    Dar de baja
-                  </button>
-
-                  <button
-                    className="h-10 rounded-xl border border-foreground/10 bg-foreground/5 px-4 text-sm font-semibold"
-                    onClick={onRestoreUser}
-                    disabled={busy}
-                  >
-                    Levantar (restore)
-                  </button>
-                </div>
-
-                <p className="text-xs text-foreground/60">
-                  Estado: {selectedUser.deletedAt ? "Baja" : "Activo"}
-                </p>
-
-                <p className="text-xs text-foreground/60">
-                  Rango actual: {selectedUser.rank?.name ?? "(sin rango)"}
-                </p>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-foreground/10 bg-background p-6">
-          <h3 className="text-sm font-semibold tracking-[0.30em] text-foreground uppercase">
-            Aprobaciones de cursos
-          </h3>
-
-          {selectedUser ? (
-            <div className="mt-4 grid gap-6">
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-5">
+          <Card delay={0.08}>
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold text-foreground/70">Aprobados</p>
-                <div className="mt-2 space-y-2">
-                  {approved.length ? (
-                    approved.map((row) => (
-                      <div
-                        key={row.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-foreground/10 bg-background px-4 py-3"
-                      >
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">
-                            {row.course.code} — {row.course.name}
-                          </p>
-                          <p className="text-xs text-foreground/60">{new Date(row.approvedAt).toLocaleString()}</p>
-                        </div>
-                        <button
-                          className="h-9 rounded-xl border border-foreground/10 bg-foreground/5 px-3 text-sm font-semibold"
-                          onClick={() => onUnapprove(row.course.id)}
-                          disabled={busy}
-                        >
-                          Quitar
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-foreground/60">Sin cursos aprobados.</p>
-                  )}
-                </div>
+                <h2 className="text-lg font-semibold tracking-tight text-foreground">Usuarios</h2>
+                <p className="mt-1 text-sm text-foreground/70">Alta/baja y selección de usuario.</p>
               </div>
-
-              <div>
-                <p className="text-xs font-semibold text-foreground/70">Disponibles</p>
-                <div className="mt-2 space-y-2">
-                  {available.length ? (
-                    available.map((course) => (
-                      <div
-                        key={course.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-foreground/10 bg-background px-4 py-3"
-                      >
-                        <p className="text-sm text-foreground">
-                          <span className="font-semibold">{course.code}</span> — {course.name}
-                        </p>
-                        <button
-                          className="h-9 rounded-xl border border-foreground/10 bg-foreground/5 px-3 text-sm font-semibold"
-                          onClick={() => onApprove(course.id)}
-                          disabled={busy}
-                        >
-                          Marcar aprobado
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-foreground/60">Sin cursos disponibles.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </section>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-foreground/10 bg-background p-6">
-          <h3 className="text-sm font-semibold tracking-[0.30em] text-foreground uppercase">
-            Cursos
-          </h3>
-
-          <div className="mt-4 grid gap-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold text-foreground/70">Código</span>
-                <input
-                  className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                  value={String(newCourse.code ?? "")}
-                  onChange={(e) => setNewCourse((p) => ({ ...p, code: e.target.value }))}
-                />
-              </label>
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold text-foreground/70">Nombre</span>
-                <input
-                  className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                  value={String(newCourse.name ?? "")}
-                  onChange={(e) => setNewCourse((p) => ({ ...p, name: e.target.value }))}
-                />
-              </label>
+              {busy ? (
+                <span className="rounded-full border border-foreground/10 bg-background/30 px-3 py-1 text-xs text-foreground/70 animate-pulse">
+                  trabajando…
+                </span>
+              ) : null}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold text-foreground/70">Tipo</span>
-                <select
-                  className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                  value={String(newCourse.type ?? "")}
-                  onChange={(e) =>
-                    setNewCourse((p) => ({
-                      ...p,
-                      type: e.target.value ? e.target.value : null,
-                    }))
-                  }
+            <div className="mt-5 space-y-3">
+              <div className="space-y-2">
+                <FieldLabel>Usuario</FieldLabel>
+                <Select
+                  value={selectedUserId ?? ""}
+                  onChange={(e) => setSelectedUserId(Number(e.target.value))}
+                  disabled={busy}
                 >
-                  <option value="">(sin tipo)</option>
-                  <option value="ascenso">ascenso</option>
-                  <option value="especialidad">especialidad</option>
-                </select>
-              </label>
-
-              <label className="flex items-center gap-3 pt-7">
-                <input
-                  type="checkbox"
-                  checked={Boolean(newCourse.requiresAllPreviousAscenso)}
-                  onChange={(e) =>
-                    setNewCourse((p) => ({
-                      ...p,
-                      requiresAllPreviousAscenso: e.target.checked,
-                    }))
-                  }
-                />
-                <span className="text-xs font-semibold text-foreground/70">TODOS (ascensos anteriores)</span>
-              </label>
-            </div>
-
-            <button
-              className="h-10 rounded-xl border border-foreground/10 bg-foreground/5 px-4 text-sm font-semibold"
-              onClick={onCreateCourse}
-              disabled={busy}
-            >
-              Crear curso
-            </button>
-
-            <div className="h-px bg-foreground/10" />
-
-            <label className="grid gap-2">
-              <span className="text-xs font-semibold text-foreground/70">Seleccionar curso</span>
-              <select
-                className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                value={selectedCourseId ?? ""}
-                onChange={(e) => setSelectedCourseId(Number(e.target.value))}
-              >
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    #{c.id} {c.code} — {c.name}
+                  <option value="" disabled>
+                    Seleccionar…
                   </option>
-                ))}
-              </select>
-            </label>
+                  {users.map((u) => {
+                    const tag = u.deletedAt ? "(baja)" : "";
+                    return (
+                      <option key={u.id} value={u.id}>
+                        #{u.id} {u.name} — {u.email} {tag}
+                      </option>
+                    );
+                  })}
+                </Select>
+              </div>
 
-            {selectedCourse ? (
-              <div className="grid gap-3">
-                <p className="text-xs text-foreground/60">
-                  Curso: <span className="font-semibold">{selectedCourse.code}</span>
-                </p>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-2">
-                    <span className="text-xs font-semibold text-foreground/70">Código</span>
-                    <input
-                      className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                      defaultValue={selectedCourse.code}
-                      onChange={(e) => setCoursePatch((p) => ({ ...p, code: e.target.value }))}
-                    />
-                  </label>
-                  <label className="grid gap-2">
-                    <span className="text-xs font-semibold text-foreground/70">Nombre</span>
-                    <input
-                      className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                      defaultValue={selectedCourse.name}
-                      onChange={(e) => setCoursePatch((p) => ({ ...p, name: e.target.value }))}
-                    />
-                  </label>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-2">
-                    <span className="text-xs font-semibold text-foreground/70">Tipo</span>
-                    <select
-                      className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                      defaultValue={selectedCourse.type ?? ""}
-                      onChange={(e) =>
-                        setCoursePatch((p) => ({
-                          ...p,
-                          type: e.target.value ? e.target.value : null,
-                        }))
-                      }
+              {selectedUser ? (
+                <ControlBase className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">{selectedUser.name}</p>
+                      <p className="truncate text-sm text-foreground/70">{selectedUser.email}</p>
+                    </div>
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full border border-foreground/10 bg-background/30 px-3 py-1 text-xs",
+                        selectedUser.deletedAt ? "text-foreground/70" : "text-foreground",
+                      )}
                     >
-                      <option value="">(sin tipo)</option>
-                      <option value="ascenso">ascenso</option>
-                      <option value="especialidad">especialidad</option>
-                    </select>
-                  </label>
-
-                  <label className="flex items-center gap-3 pt-7">
-                    <input
-                      type="checkbox"
-                      defaultChecked={Boolean(selectedCourse.requiresAllPreviousAscenso)}
-                      onChange={(e) =>
-                        setCoursePatch((p) => ({
-                          ...p,
-                          requiresAllPreviousAscenso: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span className="text-xs font-semibold text-foreground/70">TODOS</span>
-                  </label>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    className="h-10 rounded-xl border border-foreground/10 bg-foreground/5 px-4 text-sm font-semibold"
-                    onClick={onSaveCourse}
-                    disabled={busy}
-                  >
-                    Guardar curso
-                  </button>
-                  <button
-                    className="h-10 rounded-xl border border-foreground/10 bg-foreground/5 px-4 text-sm font-semibold"
-                    onClick={onDeleteCourse}
-                    disabled={busy}
-                  >
-                    Eliminar curso
-                  </button>
-                </div>
-
-                <div className="grid gap-2">
-                  <p className="text-xs font-semibold text-foreground/70">Prerequisitos</p>
-
-                  <div className="flex flex-wrap gap-3">
-                    <select
-                      className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                      value={prereqToAddId ?? ""}
-                      onChange={(e) => setPrereqToAddId(Number(e.target.value))}
-                    >
-                      <option value="">Seleccionar…</option>
-                      {courses
-                        .filter((c) => c.id !== selectedCourse.id)
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.code} — {c.name}
-                          </option>
-                        ))}
-                    </select>
-                    <button
-                      className="h-10 rounded-xl border border-foreground/10 bg-foreground/5 px-4 text-sm font-semibold"
-                      onClick={onAddPrereq}
-                      disabled={busy}
-                    >
-                      Agregar
-                    </button>
+                      {selectedUser.deletedAt ? "BAJA" : "ACTIVO"}
+                    </span>
                   </div>
 
-                  <div className="mt-2 space-y-2">
-                    {prereqs.length ? (
-                      prereqs.map((row) => (
-                        <div
-                          key={row.id}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-foreground/10 bg-background px-4 py-3"
-                        >
-                          <p className="text-sm text-foreground">
-                            <span className="font-semibold">{row.prerequisite.code}</span> — {row.prerequisite.name}
-                          </p>
-                          <button
-                            className="h-9 rounded-xl border border-foreground/10 bg-foreground/5 px-3 text-sm font-semibold"
-                            onClick={() => onRemovePrereq(row.prerequisite.id)}
-                            disabled={busy}
-                          >
-                            Quitar
-                          </button>
-                        </div>
-                      ))
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs text-foreground/70">rol</p>
+                      <p className="font-medium text-foreground">{selectedUser.role}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-foreground/70">rango</p>
+                      <p className="font-medium text-foreground">{selectedUser.rank?.name ?? "(sin rango)"}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    {selectedUser.deletedAt ? (
+                      <Button type="button" onClick={onRestore} disabled={busy} className="w-full sm:w-auto">
+                        Dar de alta
+                      </Button>
                     ) : (
-                      <p className="text-sm text-foreground/60">Sin prerequisitos.</p>
+                      <Button
+                        type="button"
+                        onClick={onDeactivate}
+                        disabled={busy || !selectedUserId}
+                        className="w-full sm:w-auto"
+                      >
+                        Dar de baja
+                      </Button>
                     )}
                   </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </section>
+                </ControlBase>
+              ) : (
+                <p className="text-sm text-foreground/70">Seleccioná un usuario para editar.</p>
+              )}
+            </div>
+          </Card>
+        </div>
 
-        <section className="rounded-2xl border border-foreground/10 bg-background p-6">
-          <h3 className="text-sm font-semibold tracking-[0.30em] text-foreground uppercase">
-            Rangos
-          </h3>
-
-          <div className="mt-4 grid gap-4">
-            <button
-              className="h-10 rounded-xl border border-foreground/10 bg-foreground/5 px-4 text-sm font-semibold"
-              onClick={seedRanks}
-              disabled={busy}
-            >
-              Cargar rangos (Sobre nosotros)
-            </button>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold text-foreground/70">Nombre</span>
-                <input
-                  className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                  value={String(newRank.name ?? "")}
-                  onChange={(e) => setNewRank((p) => ({ ...p, name: e.target.value }))}
-                />
-              </label>
-              <label className="grid gap-2">
-                <span className="text-xs font-semibold text-foreground/70">Sort order</span>
-                <input
-                  className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                  inputMode="numeric"
-                  value={String(newRank.sortOrder ?? 0)}
-                  onChange={(e) => setNewRank((p) => ({ ...p, sortOrder: Number(e.target.value) }))}
-                />
-              </label>
+        <div className="lg:col-span-7">
+          <Card delay={0.12}>
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight text-foreground">Permisos y cursos</h2>
+              <p className="mt-1 text-sm text-foreground/70">Rol, rango y cursos aprobados del usuario.</p>
             </div>
 
-            <button
-              className="h-10 rounded-xl border border-foreground/10 bg-foreground/5 px-4 text-sm font-semibold"
-              onClick={onCreateRank}
-              disabled={busy}
-            >
-              Crear rango
-            </button>
+            {selectedUser ? (
+              <div className="mt-5 grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <ControlBase className="p-4">
+                    <p className="text-sm font-medium text-foreground">Rol</p>
+                    <p className="mt-1 text-xs text-foreground/70">Solo user o moderator.</p>
+                    <div className="mt-3 flex gap-3">
+                      <Select
+                        value={roleDraft}
+                        onChange={(e) => setRoleDraft(e.target.value as UserRole)}
+                        disabled={busy}
+                      >
+                        <option value="user">user</option>
+                        <option value="moderator">moderator</option>
+                      </Select>
+                      <Button
+                        type="button"
+                        onClick={onSaveRole}
+                        disabled={busy || !roleDraft || roleDraft === selectedUser.role}
+                      >
+                        Guardar
+                      </Button>
+                    </div>
+                  </ControlBase>
 
-            <div className="h-px bg-foreground/10" />
+                  <ControlBase className="p-4">
+                    <p className="text-sm font-medium text-foreground">Rango</p>
+                    <p className="mt-1 text-xs text-foreground/70">Asignar o dejar sin rango.</p>
+                    <div className="mt-3 flex gap-3">
+                      <Select
+                        value={rankIdDraft === null ? "" : rankIdDraft}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setRankIdDraft(v === "" ? null : Number(v));
+                        }}
+                        disabled={busy}
+                      >
+                        <option value="">Sin rango</option>
+                        {ranks
+                          .slice()
+                          .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.id - b.id))
+                          .map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.name}
+                            </option>
+                          ))}
+                      </Select>
+                      <Button
+                        type="button"
+                        onClick={onSaveRank}
+                        disabled={
+                          busy ||
+                          (typeof selectedUser.rankId === "number" ? selectedUser.rankId : null) ===
+                            (typeof rankIdDraft === "number" ? rankIdDraft : null)
+                        }
+                      >
+                        Guardar
+                      </Button>
+                    </div>
+                  </ControlBase>
+                </div>
 
-            <label className="grid gap-2">
-              <span className="text-xs font-semibold text-foreground/70">Seleccionar rango</span>
-              <select
-                className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                value={selectedRankId ?? ""}
-                onChange={(e) => setSelectedRankId(Number(e.target.value))}
-              >
-                {ranks.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    #{r.id} {r.name} (sort {r.sortOrder})
-                  </option>
-                ))}
-              </select>
-            </label>
+                <ControlBase className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Cursos aprobados</p>
+                      <p className="mt-1 text-xs text-foreground/70">Cambiar estado aprobado/no aprobado.</p>
+                    </div>
+                    <Button type="button" variant="subtle" onClick={loadApproved} disabled={busy}>
+                      Recargar
+                    </Button>
+                  </div>
 
-            {selectedRank ? (
-              <div className="grid gap-3">
-                <p className="text-xs text-foreground/60">
-                  Rango: <span className="font-semibold">{selectedRank.name}</span>
-                </p>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-2">
-                    <span className="text-xs font-semibold text-foreground/70">Nombre</span>
-                    <input
-                      className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                      defaultValue={selectedRank.name}
-                      onChange={(e) => setRankPatch((p) => ({ ...p, name: e.target.value }))}
-                    />
-                  </label>
-                  <label className="grid gap-2">
-                    <span className="text-xs font-semibold text-foreground/70">Sort order</span>
-                    <input
-                      className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                      inputMode="numeric"
-                      defaultValue={String(selectedRank.sortOrder)}
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <Select
+                      value={courseToToggleId}
                       onChange={(e) =>
-                        setRankPatch((p) => ({
-                          ...p,
-                          sortOrder: Number(e.target.value),
-                        }))
+                        setCourseToToggleId(e.target.value === "" ? "" : Number(e.target.value))
                       }
-                    />
-                  </label>
-                </div>
+                      disabled={busy}
+                    >
+                      <option value="">Seleccionar curso…</option>
+                      {courses.map((c) => {
+                        const tag = approvedCourseIds.has(c.id) ? "(aprobado)" : "";
+                        return (
+                          <option key={c.id} value={c.id}>
+                            {c.code} — {c.name} {tag}
+                          </option>
+                        );
+                      })}
+                    </Select>
 
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    className="h-10 rounded-xl border border-foreground/10 bg-foreground/5 px-4 text-sm font-semibold"
-                    onClick={onSaveRank}
+                    <Button type="button" onClick={onToggleCourse} disabled={busy || courseToToggleId === ""}>
+                      Cambiar
+                    </Button>
+                  </div>
+
+                  <div className="mt-5">
+                    {approvedRows.length ? (
+                      <ul className="space-y-2">
+                        {approvedRows.map((row) => (
+                          <li
+                            key={row.id}
+                            className="flex flex-col justify-between gap-2 rounded-xl border border-foreground/10 bg-background/20 px-3 py-2 sm:flex-row sm:items-center"
+                          >
+                            <span className="text-sm text-foreground">
+                              {row.course.code} — {row.course.name}
+                            </span>
+                            <Button
+                              type="button"
+                              onClick={async () => {
+                                if (!selectedUserId) return;
+                                if (!confirm("¿Marcar como NO aprobado?") ) return;
+
+                                setError(null);
+                                setBusy(true);
+                                try {
+                                  await apiFetch<{ ok: true }>(
+                                    `${backendBaseUrl}/users/${selectedUserId}/courses/approved/${row.course.id}`,
+                                    { accessToken, method: "DELETE" },
+                                  );
+                                  await loadApproved();
+                                } catch (e) {
+                                  setError((e as Error).message);
+                                } finally {
+                                  setBusy(false);
+                                }
+                              }}
+                              disabled={busy}
+                              className="px-3 py-2 text-xs"
+                            >
+                              Reprobar
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-foreground/70">No hay cursos aprobados.</p>
+                    )}
+                  </div>
+                </ControlBase>
+              </div>
+            ) : (
+              <p className="mt-5 text-sm text-foreground/70">Seleccioná un usuario para habilitar edición.</p>
+            )}
+          </Card>
+        </div>
+      </div>
+
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card delay={0.16}>
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">Cursos</h2>
+            <p className="mt-1 text-sm text-foreground/70">Crear y modificar cursos.</p>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-4">
+            <ControlBase className="p-4">
+              <p className="text-sm font-medium text-foreground">Editar curso</p>
+              <div className="mt-4 space-y-3">
+                <div className="space-y-2">
+                  <FieldLabel>Curso</FieldLabel>
+                  <Select
+                    value={selectedCourseId ?? ""}
+                    onChange={(e) => setSelectedCourseId(Number(e.target.value))}
                     disabled={busy}
                   >
-                    Guardar rango
-                  </button>
-                  <button
-                    className="h-10 rounded-xl border border-foreground/10 bg-foreground/5 px-4 text-sm font-semibold"
-                    onClick={onDeleteRank}
-                    disabled={busy}
-                  >
-                    Eliminar rango
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <select
-                    className="h-10 rounded-xl border border-foreground/10 bg-background px-3 text-sm"
-                    value={unlockToAddCourseId ?? ""}
-                    onChange={(e) => setUnlockToAddCourseId(Number(e.target.value))}
-                  >
-                    <option value="">Seleccionar curso…</option>
+                    <option value="" disabled>
+                      Seleccionar…
+                    </option>
                     {courses.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.code} — {c.name}
                       </option>
                     ))}
-                  </select>
-                  <button
-                    className="h-10 rounded-xl border border-foreground/10 bg-foreground/5 px-4 text-sm font-semibold"
-                    onClick={onAddUnlock}
-                    disabled={busy}
-                  >
-                    Asignar unlock
-                  </button>
+                  </Select>
                 </div>
 
-                <div className="mt-2 space-y-2">
-                  {unlocks.length ? (
-                    unlocks.map((row) => (
-                      <div
-                        key={row.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-foreground/10 bg-background px-4 py-3"
-                      >
-                        <p className="text-sm text-foreground">
-                          <span className="font-semibold">{row.course.code}</span> — {row.course.name}
-                        </p>
-                        <button
-                          className="h-9 rounded-xl border border-foreground/10 bg-foreground/5 px-3 text-sm font-semibold"
-                          onClick={() => onRemoveUnlock(row.course.id)}
-                          disabled={busy}
-                        >
-                          Quitar
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-foreground/60">Sin unlocks.</p>
-                  )}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <FieldLabel>Código</FieldLabel>
+                    <Input
+                      value={courseEdit.code}
+                      onChange={(e) => setCourseEdit((s) => ({ ...s, code: e.target.value }))}
+                      disabled={busy || !selectedCourse}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <FieldLabel>Nombre</FieldLabel>
+                    <Input
+                      value={courseEdit.name}
+                      onChange={(e) => setCourseEdit((s) => ({ ...s, name: e.target.value }))}
+                      disabled={busy || !selectedCourse}
+                    />
+                  </div>
                 </div>
+
+                <div className="space-y-2">
+                  <FieldLabel>Descripción (opcional)</FieldLabel>
+                  <Textarea
+                    className="min-h-[90px]"
+                    value={courseEdit.description}
+                    onChange={(e) => setCourseEdit((s) => ({ ...s, description: e.target.value }))}
+                    disabled={busy || !selectedCourse}
+                  />
+                </div>
+
+                <Button type="button" onClick={onUpdateCourse} disabled={busy || !selectedCourseId} className="w-full">
+                  Guardar cambios
+                </Button>
               </div>
-            ) : null}
+            </ControlBase>
+
+            <ControlBase className="p-4">
+              <p className="text-sm font-medium text-foreground">Crear curso</p>
+              <div className="mt-4 space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <FieldLabel>Código</FieldLabel>
+                    <Input
+                      value={courseNew.code}
+                      onChange={(e) => setCourseNew((s) => ({ ...s, code: e.target.value }))}
+                      disabled={busy}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <FieldLabel>Nombre</FieldLabel>
+                    <Input
+                      value={courseNew.name}
+                      onChange={(e) => setCourseNew((s) => ({ ...s, name: e.target.value }))}
+                      disabled={busy}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <FieldLabel>Descripción (opcional)</FieldLabel>
+                  <Textarea
+                    className="min-h-[90px]"
+                    value={courseNew.description}
+                    onChange={(e) => setCourseNew((s) => ({ ...s, description: e.target.value }))}
+                    disabled={busy}
+                  />
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={onCreateCourse}
+                  disabled={busy || !courseNew.code.trim() || !courseNew.name.trim()}
+                  className="w-full"
+                >
+                  Crear
+                </Button>
+              </div>
+            </ControlBase>
           </div>
-        </section>
+        </Card>
+
+        <Card delay={0.2}>
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">Rangos</h2>
+            <p className="mt-1 text-sm text-foreground/70">Crear y modificar rangos.</p>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-4">
+            <ControlBase className="p-4">
+              <p className="text-sm font-medium text-foreground">Editar rango</p>
+              <div className="mt-4 space-y-3">
+                <div className="space-y-2">
+                  <FieldLabel>Rango</FieldLabel>
+                  <Select
+                    value={selectedRankId ?? ""}
+                    onChange={(e) => setSelectedRankId(Number(e.target.value))}
+                    disabled={busy}
+                  >
+                    <option value="" disabled>
+                      Seleccionar…
+                    </option>
+                    {ranks
+                      .slice()
+                      .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.id - b.id))
+                      .map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} (sortOrder: {r.sortOrder})
+                        </option>
+                      ))}
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <FieldLabel>Nombre</FieldLabel>
+                    <Input
+                      value={rankEdit.name}
+                      onChange={(e) => setRankEdit((s) => ({ ...s, name: e.target.value }))}
+                      disabled={busy || !selectedRank}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <FieldLabel>Sort order</FieldLabel>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={rankEdit.sortOrder}
+                      onChange={(e) => setRankEdit((s) => ({ ...s, sortOrder: e.target.value }))}
+                      disabled={busy || !selectedRank}
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={onUpdateRank}
+                  disabled={busy || !selectedRankId || !rankEdit.name.trim()}
+                  className="w-full"
+                >
+                  Guardar cambios
+                </Button>
+              </div>
+            </ControlBase>
+
+            <ControlBase className="p-4">
+              <p className="text-sm font-medium text-foreground">Crear rango</p>
+              <div className="mt-4 space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <FieldLabel>Nombre</FieldLabel>
+                    <Input
+                      value={rankNew.name}
+                      onChange={(e) => setRankNew((s) => ({ ...s, name: e.target.value }))}
+                      disabled={busy}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <FieldLabel>Sort order</FieldLabel>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={rankNew.sortOrder}
+                      onChange={(e) => setRankNew((s) => ({ ...s, sortOrder: e.target.value }))}
+                      disabled={busy}
+                    />
+                  </div>
+                </div>
+
+                <Button type="button" onClick={onCreateRank} disabled={busy || !rankNew.name.trim()} className="w-full">
+                  Crear
+                </Button>
+              </div>
+            </ControlBase>
+          </div>
+        </Card>
       </div>
     </div>
   );

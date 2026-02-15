@@ -55,6 +55,7 @@ export function Navbar() {
   const displayName =
     (session?.user as any)?.name ?? (session?.user as any)?.email ?? "Usuario";
   const role = (session?.user as any)?.role as string | undefined;
+  const isSuperAdmin = (role ?? "").toLowerCase() === "super_admin";
   const initials = useMemo(() => getInitials(String(displayName)), [displayName]);
 
   return (
@@ -115,13 +116,24 @@ export function Navbar() {
                 className="absolute right-0 mt-2 w-52 overflow-hidden rounded-2xl border border-foreground/10 bg-background shadow-sm"
               >
                 <Link
-                  href="/usuario/ajustes"
+                  href="/dashboard"
                   role="menuitem"
                   onClick={() => setMenuOpen(false)}
                   className="block px-4 py-3 text-sm text-foreground transition-colors hover:bg-foreground/5"
                 >
                   Ajustes de perfil
                 </Link>
+
+                {isSuperAdmin ? (
+                  <Link
+                    href="/dashboard/admin"
+                    role="menuitem"
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-4 py-3 text-sm text-foreground transition-colors hover:bg-foreground/5"
+                  >
+                    Panel de administrador
+                  </Link>
+                ) : null}
                 <button
                   type="button"
                   role="menuitem"

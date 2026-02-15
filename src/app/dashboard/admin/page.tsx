@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
+import { AdminPanel } from "@/components/admin";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -9,12 +10,18 @@ export default async function AdminDashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/unete");
 
+  const role = String((session as any).user?.role ?? "").toLowerCase();
+  if (role !== "super_admin") {
+    redirect("/dashboard");
+  }
+
+  const backendBaseUrl =
+    process.env.AUTH_BACKEND_URL ??
+    (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : "");
+
+  const accessToken = (session as any).accessToken as string | undefined;
+
   return (
-    <div className="mx-auto max-w-3xl px-6 py-16">
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Admin</h1>
-      <p className="mt-3 text-sm text-foreground/70">
-        Área admin (pendiente de conectar a datos).
-      </p>
-    </div>
+    <AdminPanel backendBaseUrl={backendBaseUrl} accessToken={accessToken} />
   );
 }

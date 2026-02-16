@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
@@ -139,7 +140,12 @@ function resolveCourseLogo(courseCode: string) {
 }
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
+  let session = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch {
+    session = null;
+  }
   if (!session) redirect("/unete");
 
   const role = String((session as any).user?.role ?? "").toLowerCase();

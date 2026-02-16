@@ -7,7 +7,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function AdminDashboardPage() {
-  const session = await getServerSession(authOptions);
+  let session = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch {
+    session = null;
+  }
   if (!session) redirect("/unete");
 
   const role = String((session as any).user?.role ?? "").toLowerCase();

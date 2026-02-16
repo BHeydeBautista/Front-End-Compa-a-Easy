@@ -116,3 +116,9 @@ export async function POST(req: NextRequest) {
   clearNextAuthCookies(req, res);
   return res;
 }
+
+export async function GET(req: NextRequest) {
+  const res = NextResponse.redirect(new URL("/unete", req.url));
+  clearNextAuthCookies(req, res);
+  return res;
+}

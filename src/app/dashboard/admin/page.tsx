@@ -27,6 +27,10 @@ export default async function AdminDashboardPage() {
 
   const accessToken = (session as any).accessToken as string | undefined;
 
+  if (!backendBaseUrl || !accessToken) {
+    redirect("/unete");
+  }
+
   return (
     <AdminPanel backendBaseUrl={backendBaseUrl} accessToken={accessToken} />
   );

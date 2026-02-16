@@ -51,7 +51,15 @@ export function Navbar() {
     { text: "Miembros", url: "/miembros" },
   ];
 
-  const isAuthenticated = status === "authenticated";
+  const sessionUserIdRaw = (session?.user as any)?.id;
+  const sessionUserId = Number(sessionUserIdRaw);
+  const hasBackendSession =
+    typeof (session as any)?.accessToken === "string" &&
+    (session as any).accessToken.length > 0 &&
+    Number.isFinite(sessionUserId) &&
+    sessionUserId > 0;
+
+  const isAuthenticated = status === "authenticated" && hasBackendSession;
   const displayName =
     (session?.user as any)?.name ?? (session?.user as any)?.email ?? "Usuario";
   const role = (session?.user as any)?.role as string | undefined;

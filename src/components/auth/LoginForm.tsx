@@ -71,8 +71,13 @@ export function LoginForm() {
               password,
               redirect: false,
             }),
-            12_000,
+            35_000,
           );
+
+          if (!res) {
+            setError("No se pudo completar el inicio de sesión. Intenta nuevamente.");
+            return;
+          }
 
           if (res?.error) {
             if (res.error === "CredentialsSignin") {
@@ -83,11 +88,18 @@ export function LoginForm() {
             return;
           }
 
+          if (res.ok === false) {
+            setError("No se pudo iniciar sesión");
+            return;
+          }
+
           router.push("/dashboard");
           router.refresh();
         } catch (err) {
           if (err instanceof Error && err.message === "TIMEOUT") {
-            setError("El servidor tardó demasiado en responder. Intenta nuevamente.");
+            setError(
+              "El servidor tardó demasiado en responder (Render puede estar iniciando). Intenta nuevamente.",
+            );
           } else {
             setError("No se pudo iniciar sesión");
           }

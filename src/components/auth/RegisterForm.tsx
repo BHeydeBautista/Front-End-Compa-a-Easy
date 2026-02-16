@@ -94,8 +94,13 @@ export function RegisterForm() {
               password,
               redirect: false,
             }),
-            12_000,
+            35_000,
           );
+
+          if (!signInRes) {
+            setError("Cuenta creada, pero no se pudo completar el inicio de sesión.");
+            return;
+          }
 
           if (signInRes?.error) {
             if (signInRes.error === "CredentialsSignin") {
@@ -106,11 +111,18 @@ export function RegisterForm() {
             return;
           }
 
+          if (signInRes.ok === false) {
+            setError("Cuenta creada, pero no se pudo iniciar sesión");
+            return;
+          }
+
           router.push("/dashboard");
           router.refresh();
         } catch (err) {
           if (err instanceof Error && err.message === "TIMEOUT") {
-            setError("El servidor tardó demasiado en responder. Intenta nuevamente.");
+            setError(
+              "El servidor tardó demasiado en responder (Render puede estar iniciando). Intenta nuevamente.",
+            );
           } else {
             setError("No se pudo crear la cuenta");
           }

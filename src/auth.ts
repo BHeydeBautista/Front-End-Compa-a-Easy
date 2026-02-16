@@ -60,7 +60,7 @@ export const authOptions: NextAuthOptions = {
               body: JSON.stringify({ email, password }),
               cache: "no-store",
             },
-            10_000,
+            35_000,
           );
         } catch (err) {
           console.error("[auth] Backend login request failed", err);
@@ -97,6 +97,54 @@ export const authOptions: NextAuthOptions = {
     signIn: "/unete",
   },
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider !== "google") return true;
+
+      if (!backendBaseUrl) {
+        console.error("[auth] AUTH_BACKEND_URL not configured for google sign-in");
+        return false;
+      }
+
+      const idToken = (account as any)?.id_token;
+      if (typeof idToken !== "string" || idToken.length === 0) {
+        return false;
+      }
+
+      try {
+        const response = await fetchWithTimeout(
+          `${backendBaseUrl}/auth/google`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ idToken }),
+            cache: "no-store",
+          },
+          35_000,
+        );
+
+        if (!response.ok) {
+          console.error("[auth] Backend google exchange failed", response.status);
+          return false;
+        }
+
+        const json = (await response.json()) as BackendLoginResponse;
+        if (!json?.token || !json?.user) {
+          console.error("[auth] Backend google exchange returned invalid payload");
+          return false;
+        }
+
+        (user as any).id = String(json.user.id);
+        (user as any).name = json.user.name;
+        (user as any).email = json.user.email;
+        (user as any).role = json.user.role;
+        (user as any).accessToken = json.token;
+
+        return true;
+      } catch (err) {
+        console.error("[auth] Backend google exchange request failed", err);
+        return false;
+      }
+    },
     async jwt({ token, user, account }) {
       if (user) {
         token.user = {
@@ -106,45 +154,6 @@ export const authOptions: NextAuthOptions = {
           role: (user as any).role,
         };
         token.accessToken = (user as any).accessToken;
-      }
-
-      if (
-        account?.provider === "google" &&
-        typeof (account as any).id_token === "string" &&
-        (account as any).id_token.length > 0
-      ) {
-        if (!backendBaseUrl) {
-          console.error("[auth] AUTH_BACKEND_URL not configured for google exchange");
-          return token;
-        }
-
-        try {
-          const response = await fetchWithTimeout(
-            `${backendBaseUrl}/auth/google`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ idToken: (account as any).id_token }),
-              cache: "no-store",
-            },
-            15_000,
-          );
-
-          if (response.ok) {
-            const json = (await response.json()) as BackendLoginResponse;
-            if (json?.token && json?.user) {
-              token.user = {
-                id: String(json.user.id),
-                name: json.user.name,
-                email: json.user.email,
-                role: json.user.role,
-              };
-              token.accessToken = json.token;
-            }
-          }
-        } catch {
-          // ignore: keep the session without backend token
-        }
       }
 
       return token;

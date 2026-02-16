@@ -162,7 +162,7 @@ export default async function DashboardPage() {
   const userIdRaw = (session as any).user?.id;
   const userId = Number(userIdRaw);
 
-  if (!backendBaseUrl || !accessToken || !userId) {
+  if (!backendBaseUrl || !accessToken || !Number.isFinite(userId) || userId <= 0) {
     redirect("/unete");
   }
 

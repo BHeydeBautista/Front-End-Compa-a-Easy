@@ -45,15 +45,31 @@ export function RegisterForm() {
         setError(null);
         setBusy(true);
         try {
+          const payload = {
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            password,
+          };
+
           const res = await fetch("/api/register", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, email, password }),
+            body: JSON.stringify(payload),
             cache: "no-store",
           });
 
           if (!res.ok) {
-            setError("No se pudo crear la cuenta");
+            const raw = await res.text();
+            try {
+              const parsed = raw ? (JSON.parse(raw) as any) : null;
+              const message =
+                parsed?.message ||
+                parsed?.error ||
+                (typeof parsed === "string" ? parsed : null);
+              setError(String(message ?? "No se pudo crear la cuenta"));
+            } catch {
+              setError(raw || "No se pudo crear la cuenta");
+            }
             return;
           }
 
@@ -64,7 +80,9 @@ export function RegisterForm() {
           });
 
           if (signInRes?.error) {
-            setError("Cuenta creada, pero no se pudo iniciar sesión");
+            setError(
+              `Cuenta creada, pero no se pudo iniciar sesión (${signInRes.error})`,
+            );
             return;
           }
 

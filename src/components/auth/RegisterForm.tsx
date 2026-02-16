@@ -6,6 +6,21 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 
+function withTimeout<T>(promise: Promise<T>, ms: number) {
+  return new Promise<T>((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error("TIMEOUT")), ms);
+    promise
+      .then((v) => {
+        clearTimeout(id);
+        resolve(v);
+      })
+      .catch((err) => {
+        clearTimeout(id);
+        reject(err);
+      });
+  });
+}
+
 function GoogleIcon(props: { className?: string }) {
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true" className={props.className} focusable="false">
@@ -73,23 +88,32 @@ export function RegisterForm() {
             return;
           }
 
-          const signInRes = await signIn("credentials", {
-            email,
-            password,
-            redirect: false,
-          });
+          const signInRes = await withTimeout(
+            signIn("credentials", {
+              email,
+              password,
+              redirect: false,
+            }),
+            12_000,
+          );
 
           if (signInRes?.error) {
-            setError(
-              `Cuenta creada, pero no se pudo iniciar sesión (${signInRes.error})`,
-            );
+            if (signInRes.error === "CredentialsSignin") {
+              setError("Cuenta creada, pero correo/contraseña inválidos");
+            } else {
+              setError("Cuenta creada, pero no se pudo conectar con el servidor de autenticación");
+            }
             return;
           }
 
           router.push("/dashboard");
           router.refresh();
-        } catch {
-          setError("No se pudo crear la cuenta");
+        } catch (err) {
+          if (err instanceof Error && err.message === "TIMEOUT") {
+            setError("El servidor tardó demasiado en responder. Intenta nuevamente.");
+          } else {
+            setError("No se pudo crear la cuenta");
+          }
         } finally {
           setBusy(false);
         }

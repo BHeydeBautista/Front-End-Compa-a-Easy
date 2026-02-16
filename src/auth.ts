@@ -8,6 +8,19 @@ const backendBaseUrl = (
   (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : undefined)
 )?.replace(/\/+$/, "");
 
+async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 type BackendLoginResponse = {
   token: string;
   user: {
@@ -28,18 +41,31 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!backendBaseUrl) return null;
+        if (!backendBaseUrl) {
+          console.error("[auth] AUTH_BACKEND_URL not configured");
+          throw new Error("AUTH_BACKEND_URL_NOT_CONFIGURED");
+        }
 
         const email = String(credentials?.email ?? "").trim();
         const password = String(credentials?.password ?? "");
         if (!email || !password) return null;
 
-        const response = await fetch(`${backendBaseUrl}/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-          cache: "no-store",
-        });
+        let response: Response;
+        try {
+          response = await fetchWithTimeout(
+            `${backendBaseUrl}/auth/login`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email, password }),
+              cache: "no-store",
+            },
+            10_000,
+          );
+        } catch (err) {
+          console.error("[auth] Backend login request failed", err);
+          throw new Error("AUTH_BACKEND_UNREACHABLE");
+        }
 
         if (!response.ok) return null;
 
@@ -87,15 +113,22 @@ export const authOptions: NextAuthOptions = {
         typeof (account as any).id_token === "string" &&
         (account as any).id_token.length > 0
       ) {
-        if (!backendBaseUrl) return token;
+        if (!backendBaseUrl) {
+          console.error("[auth] AUTH_BACKEND_URL not configured for google exchange");
+          return token;
+        }
 
         try {
-          const response = await fetch(`${backendBaseUrl}/auth/google`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idToken: (account as any).id_token }),
-            cache: "no-store",
-          });
+          const response = await fetchWithTimeout(
+            `${backendBaseUrl}/auth/google`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ idToken: (account as any).id_token }),
+              cache: "no-store",
+            },
+            15_000,
+          );
 
           if (response.ok) {
             const json = (await response.json()) as BackendLoginResponse;

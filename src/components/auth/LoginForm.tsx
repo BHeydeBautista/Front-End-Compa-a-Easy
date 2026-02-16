@@ -6,6 +6,21 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 
+function withTimeout<T>(promise: Promise<T>, ms: number) {
+  return new Promise<T>((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error("TIMEOUT")), ms);
+    promise
+      .then((v) => {
+        clearTimeout(id);
+        resolve(v);
+      })
+      .catch((err) => {
+        clearTimeout(id);
+        reject(err);
+      });
+  });
+}
+
 function GoogleIcon(props: { className?: string }) {
   return (
     <svg
@@ -50,21 +65,32 @@ export function LoginForm() {
         setError(null);
         setBusy(true);
         try {
-          const res = await signIn("credentials", {
-            email,
-            password,
-            redirect: false,
-          });
+          const res = await withTimeout(
+            signIn("credentials", {
+              email,
+              password,
+              redirect: false,
+            }),
+            12_000,
+          );
 
           if (res?.error) {
-            setError("Correo o contraseña incorrectos");
+            if (res.error === "CredentialsSignin") {
+              setError("Correo o contraseña incorrectos");
+            } else {
+              setError("No se pudo conectar con el servidor de autenticación");
+            }
             return;
           }
 
           router.push("/dashboard");
           router.refresh();
-        } catch {
-          setError("No se pudo iniciar sesión");
+        } catch (err) {
+          if (err instanceof Error && err.message === "TIMEOUT") {
+            setError("El servidor tardó demasiado en responder. Intenta nuevamente.");
+          } else {
+            setError("No se pudo iniciar sesión");
+          }
         } finally {
           setBusy(false);
         }

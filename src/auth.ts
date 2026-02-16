@@ -3,9 +3,10 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 
-const backendBaseUrl =
+const backendBaseUrl = (
   process.env.AUTH_BACKEND_URL ??
-  (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : undefined);
+  (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : undefined)
+)?.replace(/\/+$/, "");
 
 type BackendLoginResponse = {
   token: string;

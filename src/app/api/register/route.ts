@@ -3,9 +3,10 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const backendBaseUrl =
+  const backendBaseUrl = (
     process.env.AUTH_BACKEND_URL ??
-    (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : "");
+    (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : "")
+  ).replace(/\/+$/, "");
 
   if (!backendBaseUrl) {
     return NextResponse.json(

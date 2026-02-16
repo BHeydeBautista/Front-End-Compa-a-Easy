@@ -20,9 +20,10 @@ export default async function AdminDashboardPage() {
     redirect("/dashboard");
   }
 
-  const backendBaseUrl =
+  const backendBaseUrl = (
     process.env.AUTH_BACKEND_URL ??
-    (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : "");
+    (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : "")
+  ).replace(/\/+$/, "");
 
   const accessToken = (session as any).accessToken as string | undefined;
 

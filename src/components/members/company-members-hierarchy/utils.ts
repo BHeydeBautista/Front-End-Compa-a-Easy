@@ -36,8 +36,8 @@ export const buildRankGroups = (members: CompanyMember[]): RankGroup[] => {
     .filter((g) => g.members.length > 0);
 };
 
-export const buildCategoryGroups = (): CategoryGroup[] => {
-  const memberList: CompanyMember[] = activeMembers.map((m) => ({
+export const buildCategoryGroups = (inputs = activeMembers): CategoryGroup[] => {
+  const memberList: CompanyMember[] = inputs.map((m) => ({
     name: m.name.trim(),
     rank: m.rank,
     type: m.type,

@@ -225,6 +225,17 @@ export default async function DashboardPage() {
         },
         escudoImg: "/brand/logo2.png",
       }}
+      profile={{
+        name: data.user?.name ?? session.user?.name ?? "",
+        steamName: data.user?.steamName ?? null,
+        whatsappName: data.user?.whatsappName ?? null,
+        phoneNumber: data.user?.phoneNumber ?? null,
+        discord: data.user?.discord ?? null,
+      }}
+      api={{
+        backendBaseUrl,
+        accessToken,
+      }}
       courseCatalog={courseCatalog}
       courseLogos={courseLogos}
     />

@@ -3,13 +3,18 @@
 import { Section } from "@/components/ui/Section";
 import { fadeStyles } from "./company-members-hierarchy/styles";
 import { buildCategoryGroups } from "./company-members-hierarchy/utils";
+import type { ActiveMemberInput } from "./company-members-hierarchy/types";
 import CategoryPanel from "./company-members-hierarchy/ui/CategoryPanel";
 import DivisionColumn from "./company-members-hierarchy/ui/DivisionColumn";
 import EnlistadosLayout from "./company-members-hierarchy/ui/EnlistadosLayout";
 import { RankBlock } from "./company-members-hierarchy/ui/RankBlocks";
 
-export default function CompanyMembersHierarchy() {
-  const categoryGroups = buildCategoryGroups();
+export default function CompanyMembersHierarchy({
+  members,
+}: {
+  members: ActiveMemberInput[];
+}) {
+  const categoryGroups = buildCategoryGroups(members);
 
   return (
     <main className="relative min-h-[calc(100vh-64px)] overflow-hidden">

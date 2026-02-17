@@ -4,6 +4,8 @@ import Image from "next/image";
 import { motion, useReducedMotion, type Variants } from "motion/react";
 import { cn } from "@/lib/utils";
 import { LayerStack, Card } from "@/components/ui/layer-stack";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
 export type MemberDashboardCourseCatalog = Record<string, string>;
 
@@ -30,13 +32,89 @@ type Member = {
 export function MemberDashboard(props: {
   bgSrc: string | null;
   member: Member;
+  profile: {
+    name: string;
+    steamName: string | null;
+    whatsappName: string | null;
+    phoneNumber: string | null;
+    discord: string | null;
+  };
+  api: {
+    backendBaseUrl: string;
+    accessToken: string;
+  };
   courseCatalog: MemberDashboardCourseCatalog;
   courseLogos: Record<string, string>;
 }) {
   const reduceMotion = useReducedMotion();
+  const router = useRouter();
   const ease = [0.22, 1, 0.36, 1] as const;
 
-  const { bgSrc, member, courseCatalog, courseLogos } = props;
+  const { bgSrc, member, profile, api, courseCatalog, courseLogos } = props;
+
+  const [form, setForm] = useState(() => ({
+    name: profile.name ?? "",
+    steamName: profile.steamName ?? "",
+    whatsappName: profile.whatsappName ?? "",
+    phoneNumber: profile.phoneNumber ?? "",
+    discord: profile.discord ?? "",
+  }));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveOk, setSaveOk] = useState<string | null>(null);
+
+  const inputClassName =
+    "mt-1 w-full rounded-xl border border-foreground/10 bg-background/40 px-3 py-2 text-sm text-foreground placeholder:text-foreground/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20";
+
+  const labelClassName = "text-xs font-semibold tracking-[0.14em] text-foreground/70 uppercase";
+
+  const canSubmit = useMemo(() => {
+    if (saving) return false;
+    return form.name.trim().length > 0;
+  }, [form.name, saving]);
+
+  async function onSaveProfile() {
+    if (!canSubmit) return;
+
+    setSaving(true);
+    setSaveError(null);
+    setSaveOk(null);
+
+    try {
+      const response = await fetch(`${api.backendBaseUrl}/auth/profile`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${api.accessToken}`,
+        },
+        body: JSON.stringify({
+          name: form.name,
+          steamName: form.steamName,
+          whatsappName: form.whatsappName,
+          phoneNumber: form.phoneNumber,
+          discord: form.discord,
+        }),
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        window.location.assign("/api/auth/logout");
+        return;
+      }
+
+      if (!response.ok) {
+        const msg = await response.text().catch(() => "");
+        setSaveError(msg || "No se pudo guardar los cambios.");
+        return;
+      }
+
+      setSaveOk("Cambios guardados.");
+      router.refresh();
+    } catch {
+      setSaveError("No se pudo guardar los cambios.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const normalizeCourseKey = (value: string) => value.replace(/[^a-z0-9]/gi, "").toUpperCase();
 
@@ -210,6 +288,106 @@ export function MemberDashboard(props: {
                     {member.asistencias.entrenamientos}
                   </p>
                   <p className="text-sm font-semibold tracking-wide text-foreground/70">SESIONES</p>
+                </div>
+              </div>
+            </motion.section>
+
+            {/* Profile settings */}
+            <motion.section
+              variants={item}
+              className={cn(
+                "relative overflow-hidden",
+                "bg-background/30 backdrop-blur supports-[backdrop-filter]:bg-background/20",
+                "border border-foreground/10",
+                "rounded-2xl"
+              )}
+            >
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),transparent_55%)]" aria-hidden="true" />
+              <div className="relative p-6">
+                <p className="text-sm font-semibold text-foreground">Datos del perfil</p>
+                <p className="mt-1 text-xs font-semibold tracking-wide text-foreground/60">
+                  Actualizá tu nombre y datos de contacto.
+                </p>
+
+                <div className="mt-5 grid gap-4">
+                  <div>
+                    <label className={labelClassName} htmlFor="profile-name">Nombre</label>
+                    <input
+                      id="profile-name"
+                      className={inputClassName}
+                      value={form.name}
+                      onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="Tu nombre"
+                      autoComplete="name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClassName} htmlFor="profile-phone">Número de teléfono</label>
+                    <input
+                      id="profile-phone"
+                      className={inputClassName}
+                      value={form.phoneNumber}
+                      onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+                      placeholder="Ej: +54 11 1234 5678"
+                      autoComplete="tel"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClassName} htmlFor="profile-discord">Discord</label>
+                    <input
+                      id="profile-discord"
+                      className={inputClassName}
+                      value={form.discord}
+                      onChange={(e) => setForm((prev) => ({ ...prev, discord: e.target.value }))}
+                      placeholder="Ej: usuario#1234"
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClassName} htmlFor="profile-steam">Steam</label>
+                    <input
+                      id="profile-steam"
+                      className={inputClassName}
+                      value={form.steamName}
+                      onChange={(e) => setForm((prev) => ({ ...prev, steamName: e.target.value }))}
+                      placeholder="Nombre en Steam"
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClassName} htmlFor="profile-whatsapp">WhatsApp</label>
+                    <input
+                      id="profile-whatsapp"
+                      className={inputClassName}
+                      value={form.whatsappName}
+                      onChange={(e) => setForm((prev) => ({ ...prev, whatsappName: e.target.value }))}
+                      placeholder="Nombre en WhatsApp"
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={!canSubmit}
+                      onClick={onSaveProfile}
+                      className={cn(
+                        "inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors",
+                        canSubmit
+                          ? "bg-foreground text-background hover:bg-foreground/90"
+                          : "bg-foreground/20 text-foreground/50 cursor-not-allowed"
+                      )}
+                    >
+                      {saving ? "Guardando..." : "Guardar"}
+                    </button>
+
+                    {saveOk ? <p className="text-xs font-semibold text-foreground/70">{saveOk}</p> : null}
+                    {saveError ? <p className="text-xs font-semibold text-destructive">{saveError}</p> : null}
+                  </div>
                 </div>
               </div>
             </motion.section>

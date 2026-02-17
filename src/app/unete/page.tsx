@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useRouter } from "next/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
 
@@ -18,7 +19,9 @@ export default function UnetePage() {
         </button>
       </div>
       <div className="px-6 py-24">
-        <LoginForm />
+        <React.Suspense fallback={null}>
+          <LoginForm />
+        </React.Suspense>
       </div>
     </div>
   );

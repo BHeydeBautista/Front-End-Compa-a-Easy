@@ -112,7 +112,6 @@ export function Navbar() {
 
               <span className="hidden sm:flex flex-col leading-tight">
                 <span className="text-sm font-semibold text-foreground">{displayName}</span>
-                <span className="text-xs text-foreground/60">{role ?? ""}</span>
               </span>
             </button>
 

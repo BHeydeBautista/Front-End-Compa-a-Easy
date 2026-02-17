@@ -13,7 +13,7 @@ export default async function AdminDashboardPage() {
   } catch {
     session = null;
   }
-  if (!session) redirect("/unete");
+  if (!session) redirect("/api/auth/logout");
 
   const role = String((session as any).user?.role ?? "").toLowerCase();
   if (role !== "super_admin") {
@@ -28,7 +28,7 @@ export default async function AdminDashboardPage() {
   const accessToken = (session as any).accessToken as string | undefined;
 
   if (!backendBaseUrl || !accessToken) {
-    redirect("/unete");
+    redirect("/api/auth/logout");
   }
 
   return (

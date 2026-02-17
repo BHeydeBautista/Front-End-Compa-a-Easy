@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -51,12 +51,38 @@ function GoogleIcon(props: { className?: string }) {
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [remember, setRemember] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const err = searchParams?.get("error");
+    if (!err) return;
+
+    const messageByCode: Record<string, string> = {
+      AccessDenied: "No se pudo completar el inicio de sesión.",
+      OAuthSignin: "No se pudo iniciar sesión con Google.",
+      OAuthCallback: "No se pudo completar el inicio de sesión con Google.",
+      OAuthAccountNotLinked:
+        "Ya existe una cuenta con ese correo. Inicia sesión con el método usado originalmente.",
+      GoogleBackendNotConfigured:
+        "Google está habilitado, pero el servidor no está configurado para validar el inicio de sesión.",
+      GoogleNoIdToken:
+        "No se pudo obtener el token de Google. Intenta nuevamente.",
+      GoogleExchangeFailed:
+        "No se pudo validar el inicio de sesión con el servidor. Intenta nuevamente.",
+      GoogleExchangeInvalid:
+        "La respuesta del servidor fue inválida. Intenta nuevamente.",
+      GoogleExchangeError:
+        "El servidor tardó demasiado en responder al validar Google (puede estar iniciando). Intenta nuevamente.",
+    };
+
+    setError(messageByCode[err] ?? "No se pudo completar el inicio de sesión.");
+  }, [searchParams]);
 
   return (
     <form

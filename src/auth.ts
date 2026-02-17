@@ -21,6 +21,10 @@ async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: num
   }
 }
 
+const BACKEND_AUTH_TIMEOUT_MS = 35_000;
+// Google exchange can be slower due to cold starts on free hosting.
+const BACKEND_GOOGLE_EXCHANGE_TIMEOUT_MS = 90_000;
+
 type BackendLoginResponse = {
   token: string;
   user: {
@@ -60,7 +64,7 @@ export const authOptions: NextAuthOptions = {
               body: JSON.stringify({ email, password }),
               cache: "no-store",
             },
-            35_000,
+            BACKEND_AUTH_TIMEOUT_MS,
           );
         } catch (err) {
           console.error("[auth] Backend login request failed", err);
@@ -95,6 +99,7 @@ export const authOptions: NextAuthOptions = {
   ],
   pages: {
     signIn: "/unete",
+    error: "/unete",
   },
   callbacks: {
     async signIn({ user, account }) {
@@ -102,12 +107,12 @@ export const authOptions: NextAuthOptions = {
 
       if (!backendBaseUrl) {
         console.error("[auth] AUTH_BACKEND_URL not configured for google sign-in");
-        return false;
+        return "/unete?error=GoogleBackendNotConfigured";
       }
 
       const idToken = (account as any)?.id_token;
       if (typeof idToken !== "string" || idToken.length === 0) {
-        return false;
+        return "/unete?error=GoogleNoIdToken";
       }
 
       try {
@@ -119,18 +124,18 @@ export const authOptions: NextAuthOptions = {
             body: JSON.stringify({ idToken }),
             cache: "no-store",
           },
-          35_000,
+          BACKEND_GOOGLE_EXCHANGE_TIMEOUT_MS,
         );
 
         if (!response.ok) {
           console.error("[auth] Backend google exchange failed", response.status);
-          return false;
+          return "/unete?error=GoogleExchangeFailed";
         }
 
         const json = (await response.json()) as BackendLoginResponse;
         if (!json?.token || !json?.user) {
           console.error("[auth] Backend google exchange returned invalid payload");
-          return false;
+          return "/unete?error=GoogleExchangeInvalid";
         }
 
         (user as any).id = String(json.user.id);
@@ -142,7 +147,7 @@ export const authOptions: NextAuthOptions = {
         return true;
       } catch (err) {
         console.error("[auth] Backend google exchange request failed", err);
-        return false;
+        return "/unete?error=GoogleExchangeError";
       }
     },
     async jwt({ token, user, account }) {

@@ -146,12 +146,11 @@ export default async function DashboardPage() {
   } catch {
     session = null;
   }
-  if (!session) redirect("/unete");
+  if (!session) redirect("/api/auth/logout");
 
   const role = String((session as any).user?.role ?? "").toLowerCase();
-  if (role === "super_admin") {
-    redirect("/dashboard/admin");
-  }
+  // Super admins should be able to access the member/profile dashboard.
+  // The admin panel remains available at /dashboard/admin.
 
   const backendBaseUrl = (
     process.env.AUTH_BACKEND_URL ??
@@ -163,7 +162,7 @@ export default async function DashboardPage() {
   const userId = Number(userIdRaw);
 
   if (!backendBaseUrl || !accessToken || !Number.isFinite(userId) || userId <= 0) {
-    redirect("/unete");
+    redirect("/api/auth/logout");
   }
 
   const response = await fetch(`${backendBaseUrl}/users/${userId}/courses/dashboard`, {
@@ -175,7 +174,7 @@ export default async function DashboardPage() {
   });
 
   if (response.status === 401 || response.status === 403) {
-    redirect("/unete");
+    redirect("/api/auth/logout");
   }
 
   if (!response.ok) {

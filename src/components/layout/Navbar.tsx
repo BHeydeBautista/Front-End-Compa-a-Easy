@@ -126,7 +126,7 @@ export function Navbar() {
                 className="absolute right-0 mt-2 w-52 overflow-hidden rounded-2xl border border-foreground/10 bg-background shadow-sm"
               >
                 <Link
-                  href="/dashboard"
+                  href="/usuario/ajustes"
                   role="menuitem"
                   onClick={() => setMenuOpen(false)}
                   className="block px-4 py-3 text-sm text-foreground transition-colors hover:bg-foreground/5"

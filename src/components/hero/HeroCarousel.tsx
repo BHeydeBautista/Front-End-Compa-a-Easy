@@ -7,7 +7,10 @@ import ThreeDCard from "@/components/ui/three-d-card";
 import Image from "next/image";
 
 export function HeroCarousel() {
-  const heroVideoSrc = process.env.NEXT_PUBLIC_HERO_VIDEO_SRC ?? "/video/trailer.mp4";
+  const defaultHeroVideoSrc =
+    "https://res.cloudinary.com/dfb0e4gdz/video/upload/c_limit,w_1280,vc_auto,f_auto,q_auto:eco/v1771447363/Video_Project_2_alf6mg.mp4";
+
+  const heroVideoSrc = process.env.NEXT_PUBLIC_HERO_VIDEO_SRC ?? defaultHeroVideoSrc;
   const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {

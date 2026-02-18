@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { cloudinaryImageUrl } from "@/lib/cloudinary";
 import { Pencil } from "lucide-react";
+import Cropper, { type Area } from "react-easy-crop";
 
 export type MemberDashboardCourseCatalog = Record<string, string>;
 
@@ -106,9 +107,72 @@ export function MemberDashboard(props: {
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
   const cloudinaryReady = Boolean(cloudName && uploadPreset);
 
+  const [pendingImage, setPendingImage] = useState<
+    | null
+    | {
+        kind: "avatar" | "background";
+        file: File;
+        previewUrl: string;
+      }
+  >(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+
+  const cropAspect = pendingImage?.kind === "background" ? 16 / 9 : 1;
+
+  function resetCropState() {
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
+    setConfirmError(null);
+  }
+
+  async function cropToBlob(imageSrc: string, area: Area) {
+    const image: HTMLImageElement = await new Promise((resolve, reject) => {
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("IMAGE_LOAD_FAILED"));
+      img.src = imageSrc;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.floor(area.width));
+    canvas.height = Math.max(1, Math.floor(area.height));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("CANVAS_NOT_SUPPORTED");
+
+    ctx.drawImage(
+      image,
+      area.x,
+      area.y,
+      area.width,
+      area.height,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
+
+    const blob: Blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error("CROP_TO_BLOB_FAILED"))),
+        "image/jpeg",
+        0.92,
+      );
+    });
+
+    return blob;
+  }
+
   async function uploadToCloudinary(file: File, folder: string) {
     if (!cloudName || !uploadPreset) {
-      throw new Error("CLOUDINARY_NOT_CONFIGURED");
+      throw new Error(
+        "Cloudinary no está configurado: faltan NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME o NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET.",
+      );
     }
 
     const formData = new FormData();
@@ -122,8 +186,26 @@ export function MemberDashboard(props: {
     });
 
     if (!response.ok) {
-      const msg = await response.text().catch(() => "");
-      throw new Error(msg || "CLOUDINARY_UPLOAD_FAILED");
+      let message = "CLOUDINARY_UPLOAD_FAILED";
+      try {
+        const json = (await response.json()) as any;
+        const m = String(json?.error?.message ?? "").trim();
+        if (m) message = m;
+      } catch {
+        const text = await response.text().catch(() => "");
+        const t = String(text ?? "").trim();
+        if (t) message = t;
+      }
+
+      const normalized = message.toLowerCase();
+      if (normalized.includes("upload preset") && normalized.includes("not found")) {
+        throw new Error(
+          `Cloudinary dice: "Upload preset not found". Preset enviado: "${uploadPreset}". ` +
+            `Revisa en Cloudinary > Settings > Upload > Upload presets que exista EXACTAMENTE con ese nombre ` +
+            `y que sea Unsigned (si estás subiendo desde el navegador).`,
+        );
+      }
+      throw new Error(message);
     }
 
     const json = (await response.json()) as { public_id?: string };
@@ -297,6 +379,58 @@ export function MemberDashboard(props: {
     gravity: "face",
   });
 
+  async function openEditor(kind: "avatar" | "background", file: File) {
+    if (!cloudinaryReady) {
+      const msg = "Cloudinary no está configurado.";
+      if (kind === "avatar") setAvatarError(msg);
+      else setBackgroundError(msg);
+      return;
+    }
+
+    resetCropState();
+    const previewUrl = URL.createObjectURL(file);
+    setPendingImage({ kind, file, previewUrl });
+  }
+
+  function closeEditor() {
+    if (pendingImage?.previewUrl) {
+      URL.revokeObjectURL(pendingImage.previewUrl);
+    }
+    setPendingImage(null);
+    resetCropState();
+  }
+
+  async function confirmEditor() {
+    if (!pendingImage) return;
+    if (!croppedAreaPixels) {
+      setConfirmError("Ajusta la imagen antes de confirmar.");
+      return;
+    }
+
+    setConfirmBusy(true);
+    setConfirmError(null);
+
+    try {
+      const blob = await cropToBlob(pendingImage.previewUrl, croppedAreaPixels);
+      const outFile = new File([blob], pendingImage.file.name.replace(/\.[^.]+$/, "") + ".jpg", {
+        type: "image/jpeg",
+      });
+
+      if (pendingImage.kind === "avatar") {
+        await uploadAvatarFile(outFile);
+      } else {
+        await uploadBackgroundFile(outFile);
+      }
+
+      closeEditor();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      setConfirmError(msg || "No se pudo procesar la imagen.");
+    } finally {
+      setConfirmBusy(false);
+    }
+  }
+
   return (
     <main className="group relative min-h-[calc(100vh-64px)] overflow-hidden">
       {bgSrc ? (
@@ -322,11 +456,7 @@ export function MemberDashboard(props: {
               const file = e.target.files?.[0] ?? null;
               e.currentTarget.value = "";
               if (!file) return;
-              if (!cloudinaryReady) {
-                setBackgroundError("Cloudinary no está configurado.");
-                return;
-              }
-              await uploadBackgroundFile(file);
+              await openEditor("background", file);
             }}
           />
 
@@ -434,11 +564,7 @@ export function MemberDashboard(props: {
                               const file = e.target.files?.[0] ?? null;
                               e.currentTarget.value = "";
                               if (!file) return;
-                              if (!cloudinaryReady) {
-                                setAvatarError("Cloudinary no está configurado.");
-                                return;
-                              }
-                              await uploadAvatarFile(file);
+                              await openEditor("avatar", file);
                             }}
                           />
 
@@ -472,6 +598,13 @@ export function MemberDashboard(props: {
                         priority
                       />
                     </div>
+
+                    {!readOnly && avatarError ? (
+                      <p className="mt-3 text-xs font-semibold text-destructive">{avatarError}</p>
+                    ) : null}
+                    {!readOnly && backgroundError ? (
+                      <p className="mt-2 text-xs font-semibold text-destructive">{backgroundError}</p>
+                    ) : null}
                   </motion.div>
                 ) : null}
               </div>
@@ -818,6 +951,88 @@ export function MemberDashboard(props: {
         </div>
 
       </motion.div>
+
+      {pendingImage ? (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="absolute inset-0" aria-hidden="true" />
+
+          <div className="relative mx-auto flex h-full w-full max-w-3xl flex-col px-4 py-4 sm:px-6 sm:py-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {pendingImage.kind === "avatar" ? "Ajustar avatar" : "Ajustar fondo"}
+                </p>
+                <p className="mt-1 text-xs font-semibold tracking-wide text-foreground/60">
+                  Arrastra para mover. Usa el zoom y luego confirma.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeEditor}
+                disabled={confirmBusy}
+                className={cn(
+                  "inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold",
+                  confirmBusy
+                    ? "bg-foreground/20 text-foreground/50 cursor-not-allowed"
+                    : "bg-foreground/10 text-foreground hover:bg-foreground/15",
+                )}
+              >
+                Cancelar
+              </button>
+            </div>
+
+            <div className="mt-4 relative flex-1 overflow-hidden rounded-2xl border border-foreground/10 bg-foreground/5">
+              <Cropper
+                image={pendingImage.previewUrl}
+                crop={crop}
+                zoom={zoom}
+                aspect={cropAspect}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={(_, areaPixels) => setCroppedAreaPixels(areaPixels)}
+                objectFit={pendingImage.kind === "background" ? "horizontal-cover" : "cover"}
+                showGrid={pendingImage.kind !== "avatar"}
+              />
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              <div className="flex items-center gap-4">
+                <p className="text-xs font-semibold tracking-[0.14em] text-foreground/70 uppercase">Zoom</p>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.01}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+
+              {confirmError ? (
+                <p className="text-xs font-semibold text-destructive">{confirmError}</p>
+              ) : null}
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={confirmEditor}
+                  disabled={confirmBusy}
+                  className={cn(
+                    "inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-semibold transition-colors",
+                    confirmBusy
+                      ? "bg-foreground/20 text-foreground/50 cursor-not-allowed"
+                      : "bg-foreground text-background hover:bg-foreground/90",
+                  )}
+                >
+                  {confirmBusy ? "Guardando..." : "Confirmar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

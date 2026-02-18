@@ -508,12 +508,117 @@ export function AdminPanel({
   const [rankUnlockCourseId, setRankUnlockCourseId] = React.useState<number | "">("");
 
   const [attendanceSessions, setAttendanceSessions] = React.useState<AttendanceSessionSummary[]>([]);
-  const [attendanceSelectedSessionId, setAttendanceSelectedSessionId] = React.useState<number | null>(null);
+  const [attendanceSelectedDate, setAttendanceSelectedDate] = React.useState<string>("");
+  const [attendanceSelectedType, setAttendanceSelectedType] = React.useState<AttendanceType>("mission");
   const [attendanceSessionUsers, setAttendanceSessionUsers] = React.useState<AttendanceSessionUsers | null>(null);
-  const [attendanceNewDate, setAttendanceNewDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
-  const [attendanceNewType, setAttendanceNewType] = React.useState<AttendanceType>("mission");
   const [attendanceIncludeInactive, setAttendanceIncludeInactive] = React.useState(false);
   const [attendanceUserSearch, setAttendanceUserSearch] = React.useState("");
+  const [attendanceChartRange, setAttendanceChartRange] = React.useState<"week" | "month" | "year">("week");
+
+  const toDateStringLocal = React.useCallback((d: Date) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }, []);
+
+  const startOfWeekLocal = React.useCallback(
+    (d: Date) => {
+      const day = d.getDay();
+      const mondayOffset = (day + 6) % 7;
+      const monday = new Date(d);
+      monday.setDate(d.getDate() - mondayOffset);
+      monday.setHours(0, 0, 0, 0);
+      return monday;
+    },
+    [],
+  );
+
+  const endOfWeekLocal = React.useCallback(
+    (d: Date) => {
+      const monday = startOfWeekLocal(d);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(0, 0, 0, 0);
+      return sunday;
+    },
+    [startOfWeekLocal],
+  );
+
+  const endOfMonthLocal = React.useCallback((d: Date) => {
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    last.setHours(0, 0, 0, 0);
+    return last;
+  }, []);
+
+  const rangeBounds = React.useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (attendanceChartRange === "week") {
+      const start = toDateStringLocal(startOfWeekLocal(today));
+      const end = toDateStringLocal(endOfWeekLocal(today));
+      return { start, end };
+    }
+
+    if (attendanceChartRange === "month") {
+      const start = toDateStringLocal(new Date(today.getFullYear(), today.getMonth(), 1));
+      const end = toDateStringLocal(endOfMonthLocal(today));
+      return { start, end };
+    }
+
+    // "Año": para no confundir con meses futuros, mostramos/permitimos hasta fin del mes actual.
+    const start = toDateStringLocal(new Date(today.getFullYear(), 0, 1));
+    const end = toDateStringLocal(endOfMonthLocal(today));
+    return { start, end };
+  }, [attendanceChartRange, endOfMonthLocal, endOfWeekLocal, startOfWeekLocal, toDateStringLocal]);
+
+  const formatDateLabel = React.useCallback((dateString: string) => {
+    const days = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"] as const;
+    const d = new Date(`${dateString}T00:00:00.000Z`);
+    const dow = days[d.getUTCDay()] ?? "";
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    return `${dow} ${dd}/${mm}`;
+  }, []);
+
+  const getWeekDate = React.useCallback(
+    (weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6) => {
+      // Monday-based week
+      const today = new Date();
+      const day = today.getDay();
+      const mondayOffset = (day + 6) % 7;
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - mondayOffset);
+      const target = new Date(monday);
+      target.setDate(monday.getDate() + ((weekday + 7 - 1) % 7));
+      return toDateStringLocal(target);
+    },
+    [toDateStringLocal],
+  );
+
+  const attendanceSelectedSessionId = React.useMemo(() => {
+    if (!attendanceSelectedDate) return null;
+    const found = attendanceSessions.find(
+      (s) => s.date === attendanceSelectedDate && s.type === attendanceSelectedType,
+    );
+    return found?.id ?? null;
+  }, [attendanceSelectedDate, attendanceSelectedType, attendanceSessions]);
+
+  const attendanceDatesInRange = React.useMemo(() => {
+    const dates = Array.from(new Set(attendanceSessions.map((s) => s.date)));
+    return dates
+      .filter((d) => d >= rangeBounds.start && d <= rangeBounds.end)
+      .sort((a, b) => b.localeCompare(a));
+  }, [attendanceSessions, rangeBounds.end, rangeBounds.start]);
+
+  React.useEffect(() => {
+    if (!attendanceDatesInRange.length) return;
+    setAttendanceSelectedDate((prev) => {
+      if (prev && attendanceDatesInRange.includes(prev)) return prev;
+      return attendanceDatesInRange[0];
+    });
+  }, [attendanceDatesInRange]);
 
   const loadBase = React.useCallback(async () => {
     if (!accessToken) return;
@@ -653,15 +758,35 @@ export function AdminPanel({
       );
       setAttendanceSessions(rows);
 
-      if (!attendanceSelectedSessionId && rows.length) {
-        setAttendanceSelectedSessionId(rows[0].id);
+      const uniqueDatesDesc = Array.from(new Set(rows.map((r) => r.date)));
+      if (!uniqueDatesDesc.length) {
+        setAttendanceSelectedDate("");
+        return;
       }
+
+      const todayStr = toDateStringLocal(new Date());
+      const sortedAsc = uniqueDatesDesc.slice().sort((a, b) => a.localeCompare(b));
+      const inCurrentRange = sortedAsc.filter(
+        (d) => d >= rangeBounds.start && d <= rangeBounds.end,
+      );
+
+      const pick = (() => {
+        const list = inCurrentRange.length ? inCurrentRange : sortedAsc;
+        const nextOrToday = list.find((d) => d >= todayStr);
+        if (nextOrToday) return nextOrToday;
+        return list.filter((d) => d <= todayStr).slice(-1)[0] ?? list[0];
+      })();
+
+      setAttendanceSelectedDate((prev) => {
+        if (prev && uniqueDatesDesc.includes(prev)) return prev;
+        return pick;
+      });
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
-  }, [accessToken, backendBaseUrl, attendanceSelectedSessionId]);
+  }, [accessToken, backendBaseUrl, rangeBounds.end, rangeBounds.start, toDateStringLocal]);
 
   const loadAttendanceUsers = React.useCallback(async () => {
     if (!accessToken || !attendanceSelectedSessionId) {
@@ -706,10 +831,18 @@ export function AdminPanel({
   }, [attendanceSessionUsers, attendanceUserSearch]);
 
   const chartSessions = React.useMemo(() => {
-    // sessions are returned DESC; show a recent window in chronological order
-    const window = attendanceSessions.slice(0, 28).slice().reverse();
-    return window;
-  }, [attendanceSessions]);
+    const byDate = new Map<string, { date: string; mission: number; training: number }>();
+    for (const s of attendanceSessions) {
+      if (s.date < rangeBounds.start || s.date > rangeBounds.end) continue;
+      const row = byDate.get(s.date) ?? { date: s.date, mission: 0, training: 0 };
+      if (s.type === "mission") row.mission = s.presentCount;
+      else row.training = s.presentCount;
+      byDate.set(s.date, row);
+    }
+
+    const datesAsc = Array.from(byDate.keys()).sort((a, b) => a.localeCompare(b));
+    return datesAsc.map((d) => byDate.get(d)!).filter(Boolean);
+  }, [attendanceSessions, rangeBounds.end, rangeBounds.start]);
 
   React.useEffect(() => {
     loadApproved();
@@ -1017,29 +1150,6 @@ export function AdminPanel({
       });
       await loadRankUnlocks();
       logAudit("Quitar desbloqueo", `Rango ID ${selectedRankId} — Curso ID ${courseId}`);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const onCreateAttendanceSession = async () => {
-    if (!attendanceNewDate) return;
-    setError(null);
-    setBusy(true);
-    try {
-      const created = await apiFetch<{ id: number; date: string; type: AttendanceType }>(
-        `${backendBaseUrl}/attendance/sessions`,
-        {
-          accessToken: accessToken!,
-          method: "POST",
-          body: { date: attendanceNewDate, type: attendanceNewType },
-        },
-      );
-      await loadAttendanceSessions();
-      setAttendanceSelectedSessionId(created.id);
-      logAudit("Crear asistencia", `${created.type} — ${created.date}`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1687,40 +1797,147 @@ export function AdminPanel({
 
                 <div className="mt-5 grid grid-cols-1 gap-4">
                   <ControlBase className="p-4">
-                    <p className="text-sm font-medium text-foreground">Gráfico</p>
-                    <p className="mt-1 text-xs text-foreground/70">Cantidad de miembros por sesión. Tocá una barra para seleccionar.</p>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Semana</p>
+                        <p className="mt-1 text-xs text-foreground/70">Miércoles y viernes se generan automáticamente. Elegí el día y cargá asistencias.</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="subtle"
+                          onClick={() => setAttendanceSelectedDate(getWeekDate(3))}
+                          disabled={busy}
+                          className="px-3 py-2 text-xs"
+                        >
+                          Miércoles
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="subtle"
+                          onClick={() => setAttendanceSelectedDate(getWeekDate(5))}
+                          disabled={busy}
+                          className="px-3 py-2 text-xs"
+                        >
+                          Viernes
+                        </Button>
+                        <Button type="button" variant="subtle" onClick={loadAttendanceSessions} disabled={busy} className="px-3 py-2 text-xs">
+                          Recargar
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <FieldLabel>Fecha</FieldLabel>
+                        <Select
+                          value={attendanceSelectedDate}
+                          onChange={(e) => setAttendanceSelectedDate(e.target.value)}
+                          disabled={busy || !attendanceSessions.length}
+                        >
+                          <option value="" disabled>
+                            Seleccionar…
+                          </option>
+                          {attendanceDatesInRange.map((d) => (
+                            <option key={d} value={d}>
+                              {formatDateLabel(d)} ({d})
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <FieldLabel>Tipo</FieldLabel>
+                        <Select
+                          value={attendanceSelectedType}
+                          onChange={(e) => setAttendanceSelectedType(e.target.value as AttendanceType)}
+                          disabled={busy || !attendanceSelectedDate}
+                        >
+                          <option value="mission">Misión</option>
+                          <option value="training">Entrenamiento</option>
+                        </Select>
+                      </div>
+                    </div>
+                  </ControlBase>
+
+                  <ControlBase className="p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Gráfico</p>
+                        <p className="mt-1 text-xs text-foreground/70">Semana/Mes/Año (hasta hoy). Dos barras por día: Misión y Entrenamiento.</p>
+                      </div>
+                      <div className="w-full sm:w-56">
+                        <Select value={attendanceChartRange} onChange={(e) => setAttendanceChartRange(e.target.value as "week" | "month" | "year")} disabled={busy}>
+                          <option value="week">Semana</option>
+                          <option value="month">Mes</option>
+                          <option value="year">Año</option>
+                        </Select>
+                      </div>
+                    </div>
 
                     {chartSessions.length ? (
                       <div className="mt-4">
-                        <div className="flex items-end gap-1 rounded-2xl border border-foreground/10 bg-background/20 p-3">
+                        <div className="rounded-2xl border border-foreground/10 bg-background/20 p-3">
                           {(() => {
-                            const max = Math.max(1, ...chartSessions.map((s) => s.presentCount));
-                            return chartSessions.map((s) => {
-                              const active = s.id === attendanceSelectedSessionId;
-                              const h = Math.round((s.presentCount / max) * 72);
-                              const label = s.date.slice(5);
-                              return (
-                                <button
-                                  key={s.id}
-                                  type="button"
-                                  onClick={() => setAttendanceSelectedSessionId(s.id)}
-                                  className={cn(
-                                    "flex w-6 flex-col items-center justify-end gap-1 rounded-lg px-1 py-1 transition-colors",
-                                    active ? "bg-foreground/10" : "hover:bg-foreground/5",
-                                  )}
-                                  title={`${s.date} — ${s.type === "mission" ? "Misión" : "Entrenamiento"}: ${s.presentCount}`}
-                                >
-                                  <div
-                                    className={cn(
-                                      "w-full rounded-md border border-foreground/10",
-                                      active ? "bg-foreground/60" : "bg-foreground/30",
-                                    )}
-                                    style={{ height: Math.max(2, h) }}
-                                  />
-                                  <span className="text-[10px] text-foreground/60">{label}</span>
-                                </button>
-                              );
-                            });
+                            const max = Math.max(
+                              1,
+                              ...chartSessions.flatMap((d) => [d.mission, d.training]),
+                            );
+
+                            return (
+                              <div className="flex items-end gap-2 overflow-x-auto">
+                                {chartSessions.map((d) => {
+                                  const isActiveDate = d.date === attendanceSelectedDate;
+                                  const hm = Math.round((d.mission / max) * 72);
+                                  const ht = Math.round((d.training / max) * 72);
+
+                                  return (
+                                    <div
+                                      key={d.date}
+                                      className={cn(
+                                        "flex flex-col items-center gap-1 rounded-xl px-2 py-2",
+                                        isActiveDate ? "bg-foreground/5" : "",
+                                      )}
+                                    >
+                                      <div className="flex items-end gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setAttendanceSelectedDate(d.date);
+                                            setAttendanceSelectedType("mission");
+                                          }}
+                                          className={cn(
+                                            "w-4 rounded-md border border-foreground/10",
+                                            attendanceSelectedDate === d.date && attendanceSelectedType === "mission"
+                                              ? "bg-foreground/60"
+                                              : "bg-foreground/30 hover:bg-foreground/40",
+                                          )}
+                                          style={{ height: Math.max(2, hm) }}
+                                          title={`${formatDateLabel(d.date)} — Misión: ${d.mission}`}
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setAttendanceSelectedDate(d.date);
+                                            setAttendanceSelectedType("training");
+                                          }}
+                                          className={cn(
+                                            "w-4 rounded-md border border-foreground/10",
+                                            attendanceSelectedDate === d.date && attendanceSelectedType === "training"
+                                              ? "bg-foreground/60"
+                                              : "bg-foreground/30 hover:bg-foreground/40",
+                                          )}
+                                          style={{ height: Math.max(2, ht) }}
+                                          title={`${formatDateLabel(d.date)} — Entrenamiento: ${d.training}`}
+                                        />
+                                      </div>
+                                      <span className="text-[10px] font-medium text-foreground/70">{formatDateLabel(d.date)}</span>
+                                      <span className="text-[10px] text-foreground/60">M {d.mission} / E {d.training}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
                           })()}
                         </div>
                       </div>
@@ -1730,32 +1947,10 @@ export function AdminPanel({
                   </ControlBase>
 
                   <ControlBase className="p-4">
-                    <p className="text-sm font-medium text-foreground">Crear sesión</p>
-                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <div className="space-y-2">
-                        <FieldLabel>Fecha</FieldLabel>
-                        <Input type="date" value={attendanceNewDate} onChange={(e) => setAttendanceNewDate(e.target.value)} disabled={busy} />
-                      </div>
-                      <div className="space-y-2">
-                        <FieldLabel>Tipo</FieldLabel>
-                        <Select value={attendanceNewType} onChange={(e) => setAttendanceNewType(e.target.value as AttendanceType)} disabled={busy}>
-                          <option value="mission">Misión</option>
-                          <option value="training">Entrenamiento</option>
-                        </Select>
-                      </div>
-                      <div className="flex items-end">
-                        <Button type="button" onClick={onCreateAttendanceSession} disabled={busy || !attendanceNewDate} className="w-full">
-                          Crear
-                        </Button>
-                      </div>
-                    </div>
-                  </ControlBase>
-
-                  <ControlBase className="p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="text-sm font-medium text-foreground">Sesiones</p>
-                        <p className="mt-1 text-xs text-foreground/70">Seleccioná una fecha para confirmar asistencias.</p>
+                        <p className="text-sm font-medium text-foreground">Cargar asistencia</p>
+                        <p className="mt-1 text-xs text-foreground/70">Seleccioná fecha y tipo arriba, y marcá quién asistió.</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <label className="flex items-center gap-2 text-xs text-foreground/70">
@@ -1773,36 +1968,19 @@ export function AdminPanel({
                       </div>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <FieldLabel>Sesión</FieldLabel>
-                        <Select
-                          value={attendanceSelectedSessionId ?? ""}
-                          onChange={(e) => setAttendanceSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
-                          disabled={busy || !attendanceSessions.length}
-                        >
-                          <option value="" disabled>
-                            Seleccionar…
-                          </option>
-                          {attendanceSessions.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.date} — {s.type === "mission" ? "Misión" : "Entrenamiento"} ({s.presentCount})
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <FieldLabel>Resumen</FieldLabel>
-                        <div className="rounded-xl border border-foreground/10 bg-background/20 px-3 py-2 text-sm text-foreground/80">
-                          {attendanceSessionUsers ? (
-                            <>
-                              Asistieron <span className="font-semibold">{attendanceSessionUsers.presentCount}</span> de {attendanceSessionUsers.users.length}
-                            </>
-                          ) : (
-                            <>Seleccioná una sesión</>
-                          )}
-                        </div>
+                    <div className="mt-4">
+                      <FieldLabel>Resumen</FieldLabel>
+                      <div className="mt-2 rounded-xl border border-foreground/10 bg-background/20 px-3 py-2 text-sm text-foreground/80">
+                        {attendanceSessionUsers ? (
+                          <>
+                            {formatDateLabel(attendanceSessionUsers.session.date)} — {attendanceSessionUsers.session.type === "mission" ? "Misión" : "Entrenamiento"} · Asistieron{" "}
+                            <span className="font-semibold">{attendanceSessionUsers.presentCount}</span> de {attendanceSessionUsers.users.length}
+                          </>
+                        ) : attendanceSelectedDate ? (
+                          <>Cargando sesión seleccionada…</>
+                        ) : (
+                          <>Seleccioná una fecha</>
+                        )}
                       </div>
                     </div>
 

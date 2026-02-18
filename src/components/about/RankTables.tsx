@@ -147,8 +147,8 @@ export function RankTables() {
   const fenixRows: RankRow[] = [
     { cat: "Oficiales", r: "Teniente Primero", n: 11, imgSrc: "/img/Rangos/teniente-primero.png" },
     { cat: "Oficiales", r: "Teniente Segundo", n: 10, imgSrc: "/img/Rangos/teniente-segundo.png" },
-    { cat: "Suboficiales", r: "Sargento Mayor", n: 9, imgSrc: "/img/Rangos/sargento-mayor.png" },
-    { cat: "Suboficiales", r: "Sargento Maestro", n: 8, imgSrc: "/img/Rangos/sargento-maestro.png" },
+    { cat: "Suboficiales", r: "Sargento Mayor", n: 9, imgSrc: "/img/Rangos/sargento-maestro.png" },
+    { cat: "Suboficiales", r: "Sargento Maestro", n: 8, imgSrc: "/img/Rangos/sargento-mayor.png" },
     { cat: "Suboficiales", r: "Sargento Primero", n: 7, imgSrc: "/img/Rangos/sargento-primero.png" },
     { cat: "Suboficiales", r: "Sargento", n: 6, imgSrc: "/img/Rangos/Sargento.png" },
     { cat: "Suboficiales", r: "Cabo Primero", n: 5, imgSrc: "/img/Rangos/cabo-1.png" },

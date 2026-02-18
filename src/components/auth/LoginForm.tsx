@@ -49,6 +49,22 @@ function GoogleIcon(props: { className?: string }) {
   );
 }
 
+function MicrosoftIcon(props: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={props.className}
+      focusable="false"
+    >
+      <path fill="#F25022" d="M2 2h9v9H2V2z" />
+      <path fill="#7FBA00" d="M13 2h9v9h-9V2z" />
+      <path fill="#00A4EF" d="M2 13h9v9H2v-9z" />
+      <path fill="#FFB900" d="M13 13h9v9h-9v-9z" />
+    </svg>
+  );
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -82,6 +98,17 @@ export function LoginForm() {
         "La respuesta del servidor fue inválida. Intenta nuevamente.",
       GoogleExchangeError:
         "El servidor tardó demasiado en responder al validar Google (puede estar iniciando). Intenta nuevamente.",
+
+      MicrosoftBackendNotConfigured:
+        "Microsoft está habilitado, pero el servidor no está configurado para validar el inicio de sesión.",
+      MicrosoftNoIdToken:
+        "No se pudo obtener el token de Microsoft. Intenta nuevamente.",
+      MicrosoftExchangeFailed:
+        "No se pudo validar el inicio de sesión con el servidor. Intenta nuevamente.",
+      MicrosoftExchangeInvalid:
+        "La respuesta del servidor fue inválida. Intenta nuevamente.",
+      MicrosoftExchangeError:
+        "El servidor tardó demasiado en responder al validar Microsoft (puede estar iniciando). Intenta nuevamente.",
     };
 
     setError(messageByCode[err] ?? "No se pudo completar el inicio de sesión.");
@@ -154,6 +181,15 @@ export function LoginForm() {
         >
           <GoogleIcon className="h-5 w-5" />
           Iniciar sesión con Google
+        </button>
+
+        <button
+          type="button"
+          onClick={() => signIn("azure-ad", { callbackUrl: "/dashboard" })}
+          className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-foreground/10 bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+        >
+          <MicrosoftIcon className="h-5 w-5" />
+          Iniciar sesión con Microsoft
         </button>
 
         <button

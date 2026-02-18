@@ -2,6 +2,7 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
+import AzureADProvider from "next-auth/providers/azure-ad";
 
 const backendBaseUrl = (
   process.env.AUTH_BACKEND_URL ??
@@ -24,6 +25,8 @@ async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: num
 const BACKEND_AUTH_TIMEOUT_MS = 35_000;
 // Google exchange can be slower due to cold starts on free hosting.
 const BACKEND_GOOGLE_EXCHANGE_TIMEOUT_MS = 90_000;
+// Microsoft exchange can be slower due to cold starts on free hosting.
+const BACKEND_MICROSOFT_EXCHANGE_TIMEOUT_MS = 90_000;
 
 type BackendLoginResponse = {
   token: string;
@@ -114,6 +117,20 @@ export const authOptions: NextAuthOptions = {
         }),
       ];
     })(),
+    ...(() => {
+      const clientId = process.env.MICROSOFT_CLIENT_ID;
+      const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+      // For personal accounts (hotmail/outlook), your app registration must allow "personal Microsoft accounts".
+      const tenantId = process.env.MICROSOFT_TENANT_ID ?? "common";
+      if (!clientId || !clientSecret) return [];
+      return [
+        AzureADProvider({
+          clientId,
+          clientSecret,
+          tenantId,
+        }),
+      ];
+    })(),
   ],
   pages: {
     signIn: "/unete",
@@ -121,39 +138,58 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async signIn({ user, account }) {
-      if (account?.provider !== "google") return true;
+      if (!account?.provider) return true;
+
+      if (account.provider !== "google" && account.provider !== "azure-ad") {
+        return true;
+      }
 
       if (!backendBaseUrl) {
-        console.error("[auth] AUTH_BACKEND_URL not configured for google sign-in");
-        return "/unete?error=GoogleBackendNotConfigured";
+        console.error("[auth] AUTH_BACKEND_URL not configured for OAuth sign-in");
+        return account.provider === "google"
+          ? "/unete?error=GoogleBackendNotConfigured"
+          : "/unete?error=MicrosoftBackendNotConfigured";
       }
 
       const idToken = (account as any)?.id_token;
       if (typeof idToken !== "string" || idToken.length === 0) {
-        return "/unete?error=GoogleNoIdToken";
+        return account.provider === "google"
+          ? "/unete?error=GoogleNoIdToken"
+          : "/unete?error=MicrosoftNoIdToken";
       }
+
+      const endpoint =
+        account.provider === "google" ? "/auth/google" : "/auth/microsoft";
+      const timeoutMs =
+        account.provider === "google"
+          ? BACKEND_GOOGLE_EXCHANGE_TIMEOUT_MS
+          : BACKEND_MICROSOFT_EXCHANGE_TIMEOUT_MS;
 
       try {
         const response = await fetchWithTimeout(
-          `${backendBaseUrl}/auth/google`,
+          `${backendBaseUrl}${endpoint}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ idToken }),
             cache: "no-store",
           },
-          BACKEND_GOOGLE_EXCHANGE_TIMEOUT_MS,
+          timeoutMs,
         );
 
         if (!response.ok) {
-          console.error("[auth] Backend google exchange failed", response.status);
-          return "/unete?error=GoogleExchangeFailed";
+          console.error("[auth] Backend oauth exchange failed", account.provider, response.status);
+          return account.provider === "google"
+            ? "/unete?error=GoogleExchangeFailed"
+            : "/unete?error=MicrosoftExchangeFailed";
         }
 
         const json = (await response.json()) as BackendLoginResponse;
         if (!json?.token || !json?.user) {
-          console.error("[auth] Backend google exchange returned invalid payload");
-          return "/unete?error=GoogleExchangeInvalid";
+          console.error("[auth] Backend oauth exchange returned invalid payload", account.provider);
+          return account.provider === "google"
+            ? "/unete?error=GoogleExchangeInvalid"
+            : "/unete?error=MicrosoftExchangeInvalid";
         }
 
         (user as any).id = String(json.user.id);
@@ -164,8 +200,10 @@ export const authOptions: NextAuthOptions = {
 
         return true;
       } catch (err) {
-        console.error("[auth] Backend google exchange request failed", err);
-        return "/unete?error=GoogleExchangeError";
+        console.error("[auth] Backend oauth exchange request failed", account.provider, err);
+        return account.provider === "google"
+          ? "/unete?error=GoogleExchangeError"
+          : "/unete?error=MicrosoftExchangeError";
       }
     },
     async jwt({ token, user, account }) {

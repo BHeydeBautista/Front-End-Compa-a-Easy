@@ -3,7 +3,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
-import { Eye, EyeOff } from "lucide-react";
 
 function GoogleIcon(props: { className?: string }) {
   return (
@@ -28,65 +27,31 @@ function GoogleIcon(props: { className?: string }) {
   );
 }
 
-export function RegisterForm() {
-  const [name, setName] = React.useState("");
-  const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [showPassword, setShowPassword] = React.useState(false);
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [success, setSuccess] = React.useState<string | null>(null);
-
+function MicrosoftIcon(props: { className?: string }) {
   return (
-    <form
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setError(null);
-        setSuccess(null);
-        setBusy(true);
-        try {
-          const payload = {
-            name: name.trim(),
-            email: email.trim().toLowerCase(),
-            password,
-          };
-
-          const res = await fetch("/api/register", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            cache: "no-store",
-          });
-
-          if (!res.ok) {
-            const raw = await res.text();
-            try {
-              const parsed = raw ? (JSON.parse(raw) as any) : null;
-              const message =
-                parsed?.message ||
-                parsed?.error ||
-                (typeof parsed === "string" ? parsed : null);
-              setError(String(message ?? "No se pudo crear la cuenta"));
-            } catch {
-              setError(raw || "No se pudo crear la cuenta");
-            }
-            return;
-          }
-          setSuccess(
-            "Cuenta creada. Te enviamos un correo para verificar tu email. Revisa tu bandeja (y spam) antes de iniciar sesión.",
-          );
-          // Avoid auto sign-in: backend blocks login until email is verified.
-        } catch (err) {
-          setError("No se pudo crear la cuenta");
-        } finally {
-          setBusy(false);
-        }
-      }}
-      className="mx-auto w-full max-w-md rounded-2xl border border-foreground/10 bg-background p-6"
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={props.className}
+      focusable="false"
     >
+      <path fill="#F25022" d="M2 2h9v9H2V2z" />
+      <path fill="#7FBA00" d="M13 2h9v9h-9V2z" />
+      <path fill="#00A4EF" d="M2 13h9v9H2v-9z" />
+      <path fill="#FFB900" d="M13 13h9v9h-9v-9z" />
+    </svg>
+  );
+}
+
+export function RegisterForm() {
+  return (
+    <div className="mx-auto w-full max-w-md rounded-2xl border border-foreground/10 bg-background p-6">
       <h1 className="text-2xl font-semibold tracking-tight text-foreground">Crear Cuenta</h1>
       <p className="mt-2 text-sm text-foreground/70">Regístrese para acceder a su cuenta segura</p>
 
+      <div className="mt-4 rounded-xl border border-foreground/10 bg-foreground/5 px-4 py-3 text-sm text-foreground">
+        El registro manual (correo/contraseña) está deshabilitado por ahora. Regístrate con Google o Microsoft.
+      </div>
       <div className="mt-6 space-y-3">
         <button
           type="button"
@@ -96,96 +61,23 @@ export function RegisterForm() {
           <GoogleIcon className="h-5 w-5" />
           Registrarse con Google
         </button>
-      </div>
-
-      <div className="mt-6 flex items-center gap-3">
-        <div className="h-px flex-1 bg-foreground/10" />
-        <p className="text-xs text-foreground/60">O crea tu cuenta con correo electrónico</p>
-        <div className="h-px flex-1 bg-foreground/10" />
-      </div>
-
-      <div className="mt-6 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">Nombre</label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            type="text"
-            autoComplete="name"
-            className="block w-full rounded-xl border border-foreground/10 bg-background px-3 py-3 text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
-            placeholder="Tu nombre"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">Correo Electrónico</label>
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            type="email"
-            autoComplete="email"
-            className="block w-full rounded-xl border border-foreground/10 bg-background px-3 py-3 text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
-            placeholder="you@example.com"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">Contraseña</label>
-          <div className="relative">
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              type={showPassword ? "text" : "password"}
-              autoComplete="new-password"
-              className="block w-full rounded-xl border border-foreground/10 bg-background px-3 py-3 pr-10 text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-foreground/20"
-              placeholder="Enter your password"
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((p) => !p)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-foreground/60 transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
-        </div>
-
-        {success ? (
-          <div className="rounded-xl border border-foreground/10 bg-foreground/5 px-4 py-3 text-sm text-foreground">
-            {success}
-            <div className="mt-2">
-              <Link href="/unete" className="font-semibold text-foreground hover:underline">
-                Ir a iniciar sesión
-              </Link>
-            </div>
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="rounded-xl border border-foreground/10 bg-foreground/5 px-4 py-3 text-sm text-foreground">
-            {error}
-          </div>
-        ) : null}
 
         <button
-          type="submit"
-          disabled={busy}
-          className="inline-flex h-11 w-full items-center justify-center rounded-full bg-foreground px-4 text-sm font-semibold text-background transition-colors hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:opacity-60"
+          type="button"
+          onClick={() => signIn("azure-ad", { callbackUrl: "/dashboard" })}
+          className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-foreground/10 bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
         >
-          {busy ? "Creando..." : "Crear cuenta"}
+          <MicrosoftIcon className="h-5 w-5" />
+          Registrarse con Microsoft
         </button>
-
-        <p className="pt-2 text-center text-sm text-foreground/70">
-          ¿Ya tienes una cuenta?{" "}
-          <Link href="/unete" className="font-semibold text-foreground hover:underline">
-            Iniciar sesión
-          </Link>
-        </p>
       </div>
-    </form>
+
+      <p className="pt-6 text-center text-sm text-foreground/70">
+        ¿Ya tienes una cuenta?{" "}
+        <Link href="/unete" className="font-semibold text-foreground hover:underline">
+          Iniciar sesión
+        </Link>
+      </p>
+    </div>
   );
 }

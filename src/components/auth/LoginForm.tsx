@@ -58,6 +58,9 @@ export function LoginForm() {
   const [remember, setRemember] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [canResendVerification, setCanResendVerification] = React.useState(false);
+  const [resendBusy, setResendBusy] = React.useState(false);
+  const [resendMessage, setResendMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const err = searchParams?.get("error");
@@ -89,6 +92,8 @@ export function LoginForm() {
       onSubmit={async (e) => {
         e.preventDefault();
         setError(null);
+        setResendMessage(null);
+        setCanResendVerification(false);
         setBusy(true);
         try {
           const res = await withTimeout(
@@ -109,7 +114,8 @@ export function LoginForm() {
             if (res.error === "CredentialsSignin") {
               setError("Correo o contraseña incorrectos");
             } else if (res.error === "EmailNotVerified") {
-              setError("Debes verificar tu correo antes de iniciar sesión. Revisa tu bandeja (y spam). ");
+              setError("Debes verificar tu correo antes de iniciar sesión.");
+              setCanResendVerification(true);
             } else {
               setError("No se pudo conectar con el servidor de autenticación");
             }
@@ -226,6 +232,47 @@ export function LoginForm() {
         {error ? (
           <div className="rounded-xl border border-foreground/10 bg-foreground/5 px-4 py-3 text-sm text-foreground">
             {error}
+
+            {canResendVerification ? (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  disabled={resendBusy || !email.trim()}
+                  onClick={async () => {
+                    setResendMessage(null);
+                    setResendBusy(true);
+                    try {
+                      const res = await fetch("/api/auth/resend-verification", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+                        cache: "no-store",
+                      });
+
+                      if (!res.ok) {
+                        setResendMessage("No se pudo reenviar el correo. Intenta nuevamente.");
+                        return;
+                      }
+
+                      setResendMessage(
+                        "Listo. Si el correo es correcto, te llegará un email de verificación (revisa spam).",
+                      );
+                    } catch {
+                      setResendMessage("No se pudo conectar con el servidor.");
+                    } finally {
+                      setResendBusy(false);
+                    }
+                  }}
+                  className="inline-flex h-9 items-center justify-center rounded-full bg-foreground px-4 text-xs font-semibold text-background transition-colors hover:bg-foreground/90 disabled:opacity-60"
+                >
+                  {resendBusy ? "Reenviando..." : "Reenviar verificación"}
+                </button>
+
+                {resendMessage ? (
+                  <div className="mt-2 text-xs text-foreground/70">{resendMessage}</div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
 

@@ -256,6 +256,7 @@ export default async function AjustesPerfilPage() {
       profile={{
         name: data.user?.name ?? session.user?.name ?? "",
         publicName: data.user?.publicName ?? null,
+        role,
         steamName: data.user?.steamName ?? null,
         whatsappName: data.user?.whatsappName ?? null,
         phoneNumber: data.user?.phoneNumber ?? null,

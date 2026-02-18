@@ -128,6 +128,7 @@ export default async function UsuarioPerfilPublicoPage({
       profile={{
         name: data.name ?? "",
         publicName: null,
+        role: null,
         steamName: null,
         whatsappName: null,
         phoneNumber: null,

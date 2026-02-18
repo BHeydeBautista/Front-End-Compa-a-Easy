@@ -5,8 +5,9 @@ import { motion, useReducedMotion, type Variants } from "motion/react";
 import { cn } from "@/lib/utils";
 import { LayerStack, Card } from "@/components/ui/layer-stack";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { cloudinaryImageUrl } from "@/lib/cloudinary";
+import { Pencil } from "lucide-react";
 
 export type MemberDashboardCourseCatalog = Record<string, string>;
 
@@ -37,6 +38,7 @@ export function MemberDashboard(props: {
   profile: {
     name: string;
     publicName: string | null;
+    role?: string | null;
     steamName: string | null;
     whatsappName: string | null;
     phoneNumber: string | null;
@@ -86,13 +88,8 @@ export function MemberDashboard(props: {
   const [backgroundBusy, setBackgroundBusy] = useState(false);
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
 
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
-
-  const [galleryBusy, setGalleryBusy] = useState(false);
-  const [galleryError, setGalleryError] = useState<string | null>(null);
-  const [galleryOk, setGalleryOk] = useState<string | null>(null);
-  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const avatarPickerRef = useRef<HTMLInputElement | null>(null);
+  const backgroundPickerRef = useRef<HTMLInputElement | null>(null);
 
   const inputClassName =
     "mt-1 w-full rounded-xl border border-foreground/10 bg-background/40 px-3 py-2 text-sm text-foreground placeholder:text-foreground/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20";
@@ -179,21 +176,11 @@ export function MemberDashboard(props: {
     }
   }
 
-  async function onUploadAvatar() {
-    if (readOnly) return;
-    if (!cloudinaryReady) {
-      setAvatarError("Cloudinary no está configurado.");
-      return;
-    }
-    if (!avatarFile) {
-      setAvatarError("Selecciona una imagen.");
-      return;
-    }
-
+  async function uploadAvatarFile(file: File) {
     setAvatarBusy(true);
     setAvatarError(null);
     try {
-      const publicId = await uploadToCloudinary(avatarFile, "compania-easy/avatars");
+      const publicId = await uploadToCloudinary(file, "compania-easy/avatars");
       const res = await fetch(`${api.backendBaseUrl}/auth/profile/avatar`, {
         method: "POST",
         headers: {
@@ -214,7 +201,6 @@ export function MemberDashboard(props: {
         return;
       }
 
-      setAvatarFile(null);
       router.refresh();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -224,21 +210,11 @@ export function MemberDashboard(props: {
     }
   }
 
-  async function onUploadBackground() {
-    if (readOnly) return;
-    if (!cloudinaryReady) {
-      setBackgroundError("Cloudinary no está configurado.");
-      return;
-    }
-    if (!backgroundFile) {
-      setBackgroundError("Selecciona una imagen.");
-      return;
-    }
-
+  async function uploadBackgroundFile(file: File) {
     setBackgroundBusy(true);
     setBackgroundError(null);
     try {
-      const publicId = await uploadToCloudinary(backgroundFile, "compania-easy/backgrounds");
+      const publicId = await uploadToCloudinary(file, "compania-easy/backgrounds");
       const res = await fetch(`${api.backendBaseUrl}/auth/profile/background`, {
         method: "POST",
         headers: {
@@ -259,69 +235,12 @@ export function MemberDashboard(props: {
         return;
       }
 
-      setBackgroundFile(null);
       router.refresh();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       setBackgroundError(msg || "No se pudo actualizar el fondo.");
     } finally {
       setBackgroundBusy(false);
-    }
-  }
-
-  async function onReplaceLatestGallery() {
-    if (readOnly) return;
-    if (!canEditGallery) return;
-
-    setGalleryOk(null);
-    setGalleryError(null);
-
-    if (!cloudinaryReady) {
-      setGalleryError("Cloudinary no está configurado.");
-      return;
-    }
-
-    if (galleryFiles.length < 3 || galleryFiles.length > 4) {
-      setGalleryError("Selecciona 3 o 4 imágenes.");
-      return;
-    }
-
-    setGalleryBusy(true);
-    try {
-      const publicIds: string[] = [];
-      for (const file of galleryFiles) {
-        const id = await uploadToCloudinary(file, "compania-easy/gallery/latest");
-        publicIds.push(id);
-      }
-
-      const res = await fetch(`${api.backendBaseUrl}/gallery/latest`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${api.accessToken}`,
-        },
-        body: JSON.stringify({ publicIds }),
-      });
-
-      if (res.status === 401 || res.status === 403) {
-        window.location.assign("/api/auth/logout");
-        return;
-      }
-
-      if (!res.ok) {
-        const msg = await res.text().catch(() => "");
-        setGalleryError(msg || "No se pudo actualizar la galería.");
-        return;
-      }
-
-      setGalleryOk("Galería actualizada.");
-      setGalleryFiles([]);
-      router.refresh();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "";
-      setGalleryError(msg || "No se pudo actualizar la galería.");
-    } finally {
-      setGalleryBusy(false);
     }
   }
 
@@ -366,8 +285,20 @@ export function MemberDashboard(props: {
     .filter((abbr) => !approvedKeySet.has(normalizeCourseKey(abbr)))
     .map(toCourseEntry);
 
+  const isEditor = String(profile.role ?? "").toLowerCase() === "editor";
+  const divisionLine = [member.division, member.categoria, isEditor ? "Editor" : null]
+    .filter(Boolean)
+    .join(" • ");
+
+  const avatarUrl = cloudinaryImageUrl(profile.avatarPublicId, {
+    w: 800,
+    h: 800,
+    crop: "fill",
+    gravity: "face",
+  });
+
   return (
-    <main className="relative min-h-[calc(100vh-64px)] overflow-hidden">
+    <main className="group relative min-h-[calc(100vh-64px)] overflow-hidden">
       {bgSrc ? (
         <Image
           src={bgSrc}
@@ -378,6 +309,45 @@ export function MemberDashboard(props: {
           priority
           aria-hidden="true"
         />
+      ) : null}
+
+      {!readOnly ? (
+        <>
+          <input
+            ref={backgroundPickerRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0] ?? null;
+              e.currentTarget.value = "";
+              if (!file) return;
+              if (!cloudinaryReady) {
+                setBackgroundError("Cloudinary no está configurado.");
+                return;
+              }
+              await uploadBackgroundFile(file);
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={() => backgroundPickerRef.current?.click()}
+            disabled={backgroundBusy || !cloudinaryReady}
+            title={!cloudinaryReady ? "Cloudinary no está configurado" : "Cambiar fondo"}
+            className={cn(
+              "absolute right-4 top-4 z-20 inline-flex h-10 items-center justify-center gap-2 rounded-full border border-foreground/10 px-4 text-sm font-semibold",
+              "bg-background/40 backdrop-blur supports-[backdrop-filter]:bg-background/30",
+              "opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100",
+              backgroundBusy || !cloudinaryReady
+                ? "text-foreground/50 cursor-not-allowed"
+                : "text-foreground hover:bg-foreground/10",
+            )}
+          >
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+            Fondo
+          </button>
+        </>
       ) : null}
 
       {/* Global overlay: makes the HUD readable without feeling like a single floating card */}
@@ -433,15 +403,15 @@ export function MemberDashboard(props: {
                     <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight text-foreground">
                       {member.nombre}
                     </h1>
-                    {member.division || member.categoria ? (
+                    {divisionLine ? (
                       <p className="mt-1 text-sm font-semibold text-foreground/70">
-                        {[member.division, member.categoria].filter(Boolean).join(" • ")}
+                        {divisionLine}
                       </p>
                     ) : null}
                   </div>
                 </div>
 
-                {member.escudoImg ? (
+                {(avatarUrl || member.escudoImg) ? (
                   <motion.div
                     variants={item}
                     whileHover={reduceMotion ? undefined : { scale: 1.01 }}
@@ -452,13 +422,53 @@ export function MemberDashboard(props: {
                     )}
                   >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.10),transparent_60%)]" aria-hidden="true" />
-                    <div className="relative aspect-[4/3]">
+                    <div className="relative aspect-[4/3] group/avatar">
+                      {!readOnly ? (
+                        <>
+                          <input
+                            ref={avatarPickerRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0] ?? null;
+                              e.currentTarget.value = "";
+                              if (!file) return;
+                              if (!cloudinaryReady) {
+                                setAvatarError("Cloudinary no está configurado.");
+                                return;
+                              }
+                              await uploadAvatarFile(file);
+                            }}
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => avatarPickerRef.current?.click()}
+                            disabled={avatarBusy || !cloudinaryReady}
+                            title={!cloudinaryReady ? "Cloudinary no está configurado" : "Cambiar avatar"}
+                            className={cn(
+                              "absolute right-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-foreground/10",
+                              "bg-background/40 backdrop-blur supports-[backdrop-filter]:bg-background/30",
+                              "opacity-0 transition-opacity group-hover/avatar:opacity-100 focus-visible:opacity-100",
+                              avatarBusy || !cloudinaryReady
+                                ? "text-foreground/50 cursor-not-allowed"
+                                : "text-foreground hover:bg-foreground/10",
+                            )}
+                          >
+                            <Pencil className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </>
+                      ) : null}
+
                       <Image
-                        src={member.escudoImg}
-                        alt="Escudo de Compañía Easy"
+                        src={avatarUrl || (member.escudoImg as string)}
+                        alt="Avatar"
                         fill
                         sizes="360px"
-                        className="object-contain p-10"
+                        className={cn(
+                          avatarUrl ? "object-cover" : "object-contain p-10",
+                        )}
                         priority
                       />
                     </div>
@@ -469,7 +479,6 @@ export function MemberDashboard(props: {
 
             {showPrivateDetails ? (
               <>
-                {/* Stats under identity */}
                 <motion.section
                   variants={item}
                   className={cn(
@@ -518,7 +527,6 @@ export function MemberDashboard(props: {
                   </div>
                 </motion.section>
 
-                {/* Profile settings */}
                 <motion.section
                   variants={item}
                   className={cn(
@@ -561,179 +569,85 @@ export function MemberDashboard(props: {
                         />
                       </div>
 
-                      {!readOnly ? (
-                        <>
-                          <div>
-                            <p className={labelClassName}>Avatar</p>
-                            <div className="mt-2 flex items-center gap-4">
-                              <div className="relative h-12 w-12 overflow-hidden rounded-full border border-foreground/10 bg-background/30">
-                                {(() => {
-                                  const url = cloudinaryImageUrl(profile.avatarPublicId, {
-                                    w: 96,
-                                    h: 96,
-                                    crop: "fill",
-                                    gravity: "face",
-                                  });
+                      <div>
+                        <label className={labelClassName} htmlFor="profile-phone">
+                          Número de teléfono
+                        </label>
+                        <input
+                          id="profile-phone"
+                          className={inputClassName}
+                          value={form.phoneNumber}
+                          onChange={
+                            readOnly
+                              ? undefined
+                              : (e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))
+                          }
+                          placeholder="Ej: +54 11 1234 5678"
+                          autoComplete="tel"
+                          disabled={readOnly}
+                          readOnly={readOnly}
+                        />
+                      </div>
 
-                                  if (!url) return null;
-                                  return (
-                                    <Image
-                                      src={url}
-                                      alt="Avatar"
-                                      fill
-                                      sizes="48px"
-                                      className="object-cover"
-                                    />
-                                  );
-                                })()}
-                              </div>
+                      <div>
+                        <label className={labelClassName} htmlFor="profile-discord">
+                          Discord
+                        </label>
+                        <input
+                          id="profile-discord"
+                          className={inputClassName}
+                          value={form.discord}
+                          onChange={
+                            readOnly
+                              ? undefined
+                              : (e) => setForm((prev) => ({ ...prev, discord: e.target.value }))
+                          }
+                          placeholder="Ej: usuario#1234"
+                          autoComplete="off"
+                          disabled={readOnly}
+                          readOnly={readOnly}
+                        />
+                      </div>
 
-                              <div className="flex-1">
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  disabled={avatarBusy || !cloudinaryReady}
-                                  onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
-                                  className="block w-full text-sm text-foreground/80 file:mr-4 file:rounded-full file:border-0 file:bg-foreground/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-foreground hover:file:bg-foreground/15"
-                                />
-                                <div className="mt-2 flex items-center gap-3">
-                                  <button
-                                    type="button"
-                                    onClick={onUploadAvatar}
-                                    disabled={avatarBusy || !avatarFile || !cloudinaryReady}
-                                    className={cn(
-                                      "inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors",
-                                      avatarBusy || !avatarFile || !cloudinaryReady
-                                        ? "bg-foreground/20 text-foreground/50 cursor-not-allowed"
-                                        : "bg-foreground text-background hover:bg-foreground/90",
-                                    )}
-                                  >
-                                    {avatarBusy ? "Subiendo..." : "Actualizar"}
-                                  </button>
-                                  {avatarError ? (
-                                    <p className="text-xs font-semibold text-destructive">{avatarError}</p>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                      <div>
+                        <label className={labelClassName} htmlFor="profile-steam">
+                          Steam
+                        </label>
+                        <input
+                          id="profile-steam"
+                          className={inputClassName}
+                          value={form.steamName}
+                          onChange={
+                            readOnly
+                              ? undefined
+                              : (e) => setForm((prev) => ({ ...prev, steamName: e.target.value }))
+                          }
+                          placeholder="Nombre en Steam"
+                          autoComplete="off"
+                          disabled={readOnly}
+                          readOnly={readOnly}
+                        />
+                      </div>
 
-                          <div>
-                            <p className={labelClassName}>Fondo</p>
-                            <div className="mt-2 grid gap-2">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                disabled={backgroundBusy || !cloudinaryReady}
-                                onChange={(e) => setBackgroundFile(e.target.files?.[0] ?? null)}
-                                className="block w-full text-sm text-foreground/80 file:mr-4 file:rounded-full file:border-0 file:bg-foreground/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-foreground hover:file:bg-foreground/15"
-                              />
-                              <div className="flex items-center gap-3">
-                                <button
-                                  type="button"
-                                  onClick={onUploadBackground}
-                                  disabled={backgroundBusy || !backgroundFile || !cloudinaryReady}
-                                  className={cn(
-                                    "inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors",
-                                    backgroundBusy || !backgroundFile || !cloudinaryReady
-                                      ? "bg-foreground/20 text-foreground/50 cursor-not-allowed"
-                                      : "bg-foreground text-background hover:bg-foreground/90",
-                                  )}
-                                >
-                                  {backgroundBusy ? "Subiendo..." : "Actualizar"}
-                                </button>
-                                {backgroundError ? (
-                                  <p className="text-xs font-semibold text-destructive">{backgroundError}</p>
-                                ) : null}
-                              </div>
-                            </div>
-                          </div>
-                        </>
-                      ) : null}
-
-                      {showPrivateDetails ? (
-                        <>
-                          <div>
-                            <label className={labelClassName} htmlFor="profile-phone">
-                              Número de teléfono
-                            </label>
-                            <input
-                              id="profile-phone"
-                              className={inputClassName}
-                              value={form.phoneNumber}
-                              onChange={
-                                readOnly
-                                  ? undefined
-                                  : (e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))
-                              }
-                              placeholder="Ej: +54 11 1234 5678"
-                              autoComplete="tel"
-                              disabled={readOnly}
-                              readOnly={readOnly}
-                            />
-                          </div>
-
-                          <div>
-                            <label className={labelClassName} htmlFor="profile-discord">
-                              Discord
-                            </label>
-                            <input
-                              id="profile-discord"
-                              className={inputClassName}
-                              value={form.discord}
-                              onChange={
-                                readOnly
-                                  ? undefined
-                                  : (e) => setForm((prev) => ({ ...prev, discord: e.target.value }))
-                              }
-                              placeholder="Ej: usuario#1234"
-                              autoComplete="off"
-                              disabled={readOnly}
-                              readOnly={readOnly}
-                            />
-                          </div>
-
-                          <div>
-                            <label className={labelClassName} htmlFor="profile-steam">
-                              Steam
-                            </label>
-                            <input
-                              id="profile-steam"
-                              className={inputClassName}
-                              value={form.steamName}
-                              onChange={
-                                readOnly
-                                  ? undefined
-                                  : (e) => setForm((prev) => ({ ...prev, steamName: e.target.value }))
-                              }
-                              placeholder="Nombre en Steam"
-                              autoComplete="off"
-                              disabled={readOnly}
-                              readOnly={readOnly}
-                            />
-                          </div>
-
-                          <div>
-                            <label className={labelClassName} htmlFor="profile-whatsapp">
-                              WhatsApp
-                            </label>
-                            <input
-                              id="profile-whatsapp"
-                              className={inputClassName}
-                              value={form.whatsappName}
-                              onChange={
-                                readOnly
-                                  ? undefined
-                                  : (e) => setForm((prev) => ({ ...prev, whatsappName: e.target.value }))
-                              }
-                              placeholder="Nombre en WhatsApp"
-                              autoComplete="off"
-                              disabled={readOnly}
-                              readOnly={readOnly}
-                            />
-                          </div>
-                        </>
-                      ) : null}
+                      <div>
+                        <label className={labelClassName} htmlFor="profile-whatsapp">
+                          WhatsApp
+                        </label>
+                        <input
+                          id="profile-whatsapp"
+                          className={inputClassName}
+                          value={form.whatsappName}
+                          onChange={
+                            readOnly
+                              ? undefined
+                              : (e) => setForm((prev) => ({ ...prev, whatsappName: e.target.value }))
+                          }
+                          placeholder="Nombre en WhatsApp"
+                          autoComplete="off"
+                          disabled={readOnly}
+                          readOnly={readOnly}
+                        />
+                      </div>
 
                       <div className="flex items-center gap-3">
                         {!readOnly ? (
@@ -762,73 +676,6 @@ export function MemberDashboard(props: {
                     </div>
                   </div>
                 </motion.section>
-
-                {canEditGallery ? (
-                  <motion.section
-                    variants={item}
-                    className={cn(
-                      "relative overflow-hidden",
-                      "bg-background/30 backdrop-blur supports-[backdrop-filter]:bg-background/20",
-                      "border border-foreground/10",
-                      "rounded-2xl",
-                    )}
-                  >
-                    <div
-                      className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),transparent_55%)]"
-                      aria-hidden="true"
-                    />
-                    <div className="relative p-6">
-                      <p className="text-sm font-semibold text-foreground">Galería (última misión)</p>
-                      <p className="mt-1 text-xs font-semibold tracking-wide text-foreground/60">
-                        Sube 3 o 4 imágenes. Se reemplazan las anteriores.
-                      </p>
-
-                      <div className="mt-4 grid gap-3">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          disabled={galleryBusy || !cloudinaryReady}
-                          onChange={(e) => {
-                            const files = Array.from(e.target.files ?? []);
-                            setGalleryFiles(files);
-                          }}
-                          className="block w-full text-sm text-foreground/80 file:mr-4 file:rounded-full file:border-0 file:bg-foreground/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-foreground hover:file:bg-foreground/15"
-                        />
-
-                        <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={onReplaceLatestGallery}
-                            disabled={
-                              galleryBusy ||
-                              !cloudinaryReady ||
-                              galleryFiles.length < 3 ||
-                              galleryFiles.length > 4
-                            }
-                            className={cn(
-                              "inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors",
-                              galleryBusy ||
-                                !cloudinaryReady ||
-                                galleryFiles.length < 3 ||
-                                galleryFiles.length > 4
-                                ? "bg-foreground/20 text-foreground/50 cursor-not-allowed"
-                                : "bg-foreground text-background hover:bg-foreground/90",
-                            )}
-                          >
-                            {galleryBusy ? "Subiendo..." : "Actualizar galería"}
-                          </button>
-                          {galleryOk ? (
-                            <p className="text-xs font-semibold text-foreground/70">{galleryOk}</p>
-                          ) : null}
-                          {galleryError ? (
-                            <p className="text-xs font-semibold text-destructive">{galleryError}</p>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  </motion.section>
-                ) : null}
               </>
             ) : null}
           </div>

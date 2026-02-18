@@ -152,6 +152,14 @@ export default async function DashboardPage() {
   // Super admins should be able to access the member/profile dashboard.
   // The admin panel remains available at /dashboard/admin.
 
+  if (role === "infraestructura") {
+    redirect("/dashboard/infraestructura");
+  }
+
+  if (role === "formacion") {
+    redirect("/dashboard/formacion");
+  }
+
   const backendBaseUrl = (
     process.env.AUTH_BACKEND_URL ??
     (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : "")

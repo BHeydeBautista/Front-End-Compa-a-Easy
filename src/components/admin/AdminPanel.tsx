@@ -9,7 +9,7 @@ import { motion } from "motion/react";
 import { rankInsignia } from "@/components/members/company-members-hierarchy/data";
 import { Ban, CheckCircle2, Crown, Pencil, RotateCcw, Shield, User as UserIcon } from "lucide-react";
 
-type UserRole = "super_admin" | "moderator" | "user";
+type UserRole = "super_admin" | "moderator" | "infraestructura" | "formacion" | "user";
 
 type User = {
   id: number;
@@ -35,6 +35,8 @@ type Course = {
   code: string;
   name: string;
   description?: string | null;
+  type?: "ascenso" | "especialidad" | null;
+  requiresAllPreviousAscenso?: boolean;
 };
 
 type ApprovedCourseRow = {
@@ -48,6 +50,17 @@ type RankUnlockRow = {
   createdAt: string;
   note?: string | null;
   course: Course;
+};
+
+type CourseInstructorRow = {
+  id: number;
+  createdAt: string;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+  } | null;
 };
 
 type AttendanceType = "mission" | "training";
@@ -318,6 +331,8 @@ function RankInsigniaCell({ rankName }: { rankName: string }) {
 
 type AdminSection = "users" | "courses" | "divisions" | "ranks" | "attendance" | "audit" | "settings";
 
+type AdminPanelMode = "full" | "attendanceOnly";
+
 function initials(name: string) {
   const parts = String(name ?? "")
     .trim()
@@ -394,6 +409,22 @@ function RoleBadge({ role }: { role: UserRole }) {
     );
   }
 
+  if (role === "infraestructura") {
+    return (
+      <IconPill icon={<Shield className="h-3.5 w-3.5" />} className="border-foreground/15 bg-foreground/10 text-foreground">
+        INFRA
+      </IconPill>
+    );
+  }
+
+  if (role === "formacion") {
+    return (
+      <IconPill icon={<Shield className="h-3.5 w-3.5" />} className="border-foreground/15 bg-foreground/10 text-foreground">
+        FORMACIÓN
+      </IconPill>
+    );
+  }
+
   return (
     <IconPill icon={<UserIcon className="h-3.5 w-3.5" />} className="text-foreground/80">
       USER
@@ -428,16 +459,20 @@ function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
 export function AdminPanel({
   backendBaseUrl,
   accessToken,
+  mode = "full",
 }: {
   backendBaseUrl: string;
   accessToken?: string;
+  mode?: AdminPanelMode;
 }) {
   const USERS_PAGE_SIZE = 10;
 
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const [activeSection, setActiveSection] = React.useState<AdminSection>("users");
+  const [activeSection, setActiveSection] = React.useState<AdminSection>(
+    mode === "attendanceOnly" ? "attendance" : "users",
+  );
 
   const [users, setUsers] = React.useState<User[]>([]);
   const [ranks, setRanks] = React.useState<Rank[]>([]);
@@ -496,6 +531,9 @@ export function AdminPanel({
   const [courseNew, setCourseNew] = React.useState<{ code: string; name: string; description: string }>(
     { code: "", name: "", description: "" },
   );
+
+  const [courseInstructors, setCourseInstructors] = React.useState<CourseInstructorRow[]>([]);
+  const [courseInstructorUserId, setCourseInstructorUserId] = React.useState<number | "">("");
 
   const [rankEdit, setRankEdit] = React.useState<{ name: string; sortOrder: string }>(
     { name: "", sortOrder: "0" },
@@ -621,7 +659,7 @@ export function AdminPanel({
   }, [attendanceDatesInRange]);
 
   const loadBase = React.useCallback(async () => {
-    if (!accessToken) return;
+    if (!accessToken || mode !== "full") return;
     setError(null);
     setBusy(true);
     try {
@@ -650,7 +688,7 @@ export function AdminPanel({
     } finally {
       setBusy(false);
     }
-  }, [accessToken, backendBaseUrl, selectedUserId, selectedCourseId, selectedRankId]);
+  }, [accessToken, backendBaseUrl, mode, selectedUserId, selectedCourseId, selectedRankId]);
 
   const loadApproved = React.useCallback(async () => {
     if (!accessToken || !selectedUserId) {
@@ -672,9 +710,37 @@ export function AdminPanel({
     }
   }, [accessToken, backendBaseUrl, selectedUserId]);
 
+  const loadCourseInstructors = React.useCallback(async () => {
+    if (!accessToken || mode !== "full" || !selectedCourseId) {
+      setCourseInstructors([]);
+      setCourseInstructorUserId("");
+      return;
+    }
+
+    setError(null);
+    setBusy(true);
+    try {
+      const rows = await apiFetch<CourseInstructorRow[]>(
+        `${backendBaseUrl}/courses/${selectedCourseId}/instructors`,
+        { accessToken },
+      );
+      setCourseInstructors(rows);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [accessToken, backendBaseUrl, mode, selectedCourseId]);
+
   React.useEffect(() => {
+    if (mode !== "full") return;
     loadBase();
-  }, [loadBase]);
+  }, [loadBase, mode]);
+
+  React.useEffect(() => {
+    if (mode !== "full") return;
+    loadCourseInstructors();
+  }, [loadCourseInstructors, mode]);
 
   React.useEffect(() => {
     if (!selectedUser) {
@@ -697,6 +763,8 @@ export function AdminPanel({
   React.useEffect(() => {
     if (!selectedCourse) {
       setCourseEdit({ code: "", name: "", description: "" });
+      setCourseInstructors([]);
+      setCourseInstructorUserId("");
       return;
     }
     setCourseEdit({
@@ -705,6 +773,45 @@ export function AdminPanel({
       description: selectedCourse.description ?? "",
     });
   }, [selectedCourse]);
+
+  const onAddCourseInstructor = async () => {
+    if (!accessToken || mode !== "full" || !selectedCourseId) return;
+    const userId = Number(courseInstructorUserId);
+    if (!Number.isFinite(userId) || userId <= 0) return;
+
+    setError(null);
+    setBusy(true);
+    try {
+      await apiFetch(`${backendBaseUrl}/courses/${selectedCourseId}/instructors`, {
+        accessToken,
+        method: "POST",
+        body: { userId },
+      });
+      setCourseInstructorUserId("");
+      await loadCourseInstructors();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onRemoveCourseInstructor = async (userId: number) => {
+    if (!accessToken || mode !== "full" || !selectedCourseId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await apiFetch(
+        `${backendBaseUrl}/courses/${selectedCourseId}/instructors/${userId}`,
+        { accessToken, method: "DELETE" },
+      );
+      await loadCourseInstructors();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   React.useEffect(() => {
     if (!selectedRank) {
@@ -1352,7 +1459,9 @@ export function AdminPanel({
           <div className="rounded-2xl border border-foreground/10 bg-background/30 backdrop-blur p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold tracking-[0.22em] text-foreground/60 uppercase">Administrador</p>
+                <p className="text-xs font-semibold tracking-[0.22em] text-foreground/60 uppercase">
+                  {mode === "attendanceOnly" ? "Infraestructura" : "Administrador"}
+                </p>
                 <p className="mt-1 text-base font-semibold text-foreground">Panel</p>
               </div>
               <div className="hidden w-28 sm:block" aria-hidden="true">
@@ -1361,19 +1470,31 @@ export function AdminPanel({
             </div>
 
             <div className="mt-4 grid gap-1">
-              {sideItem("users", "Usuarios")}
-              {sideItem("courses", "Cursos")}
-              {sideItem("divisions", "Divisiones")}
-              {sideItem("ranks", "Rangos")}
-              {sideItem("attendance", "Asistencias")}
-              {sideItem("audit", "Auditoría")}
-              {sideItem("settings", "Ajustes")}
+              {mode === "attendanceOnly" ? (
+                <>{sideItem("attendance", "Asistencias")}</>
+              ) : (
+                <>
+                  {sideItem("users", "Usuarios")}
+                  {sideItem("courses", "Cursos")}
+                  {sideItem("divisions", "Divisiones")}
+                  {sideItem("ranks", "Rangos")}
+                  {sideItem("attendance", "Asistencias")}
+                  {sideItem("audit", "Auditoría")}
+                  {sideItem("settings", "Ajustes")}
+                </>
+              )}
             </div>
 
             <div className="mt-4">
-              <Button type="button" onClick={loadBase} disabled={busy} className="w-full">
-                Recargar
-              </Button>
+              {mode === "attendanceOnly" ? (
+                <Button type="button" onClick={loadAttendanceSessions} disabled={busy} className="w-full">
+                  Recargar
+                </Button>
+              ) : (
+                <Button type="button" onClick={loadBase} disabled={busy} className="w-full">
+                  Recargar
+                </Button>
+              )}
             </div>
           </div>
         </aside>
@@ -1384,25 +1505,33 @@ export function AdminPanel({
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h1 className="text-balance text-2xl font-semibold tracking-tight text-foreground">ADMINISTRADOR</h1>
-                    <p className="mt-1 text-sm leading-6 text-foreground/70">Gestión de usuarios y recursos.</p>
+                    <h1 className="text-balance text-2xl font-semibold tracking-tight text-foreground">
+                      {mode === "attendanceOnly" ? "ASISTENCIAS" : "ADMINISTRADOR"}
+                    </h1>
+                    <p className="mt-1 text-sm leading-6 text-foreground/70">
+                      {mode === "attendanceOnly" ? "Carga de asistencias por fecha." : "Gestión de usuarios y recursos."}
+                    </p>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-1">
-                    {topTab("users", "Usuarios")}
-                    {topTab("courses", "Cursos")}
-                    {topTab("divisions", "Divisiones")}
-                    {topTab("ranks", "Rangos")}
-                    {topTab("attendance", "Asistencias")}
-                  </div>
+                  {mode === "full" ? (
+                    <div className="flex flex-wrap items-center gap-1">
+                      {topTab("users", "Usuarios")}
+                      {topTab("courses", "Cursos")}
+                      {topTab("divisions", "Divisiones")}
+                      {topTab("ranks", "Rangos")}
+                      {topTab("attendance", "Asistencias")}
+                    </div>
+                  ) : null}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <StatCard label="Usuarios" value={stats.users} />
-                  <StatCard label="Cursos" value={stats.courses} />
-                  <StatCard label="Divisiones" value={stats.divisions} />
-                  <StatCard label="Rangos" value={stats.ranks} />
-                </div>
+                {mode === "full" ? (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <StatCard label="Usuarios" value={stats.users} />
+                    <StatCard label="Cursos" value={stats.courses} />
+                    <StatCard label="Divisiones" value={stats.divisions} />
+                    <StatCard label="Rangos" value={stats.ranks} />
+                  </div>
+                ) : null}
 
                 {error ? (
                   <div className="rounded-xl border border-foreground/10 bg-background/30 p-4">
@@ -1429,6 +1558,8 @@ export function AdminPanel({
                         <option value="all">Todos los roles</option>
                         <option value="user">user</option>
                         <option value="moderator">moderator</option>
+                        <option value="infraestructura">infraestructura</option>
+                        <option value="formacion">formacion</option>
                         <option value="super_admin">super_admin</option>
                       </Select>
                     </div>
@@ -1464,7 +1595,7 @@ export function AdminPanel({
                             const rankName = u.rank?.name ?? "";
                             const avatarSrc = rankName ? resolveRankImage(rankName) : "";
                             const isActive = !u.deletedAt;
-                            const canToggleRole = u.role !== "super_admin";
+                            const canToggleRole = u.role === "user" || u.role === "moderator";
 
                             return (
                               <div
@@ -1530,7 +1661,7 @@ export function AdminPanel({
                                         onSetRole(u.id, nextRole);
                                       }}
                                       disabled={busy || !canToggleRole}
-                                      title={canToggleRole ? "Alternar rol user/moderator" : "No se puede cambiar super_admin"}
+                                      title={canToggleRole ? "Alternar rol user/moderator" : "Alternar solo aplica a user/moderator"}
                                     >
                                       <Shield className="h-4 w-4" />
                                     </IconButton>
@@ -1621,11 +1752,13 @@ export function AdminPanel({
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <ControlBase className="p-4">
                         <p className="text-sm font-medium text-foreground">Rol</p>
-                        <p className="mt-1 text-xs text-foreground/70">Solo user o moderator.</p>
+                        <p className="mt-1 text-xs text-foreground/70">Asignar permisos al usuario.</p>
                         <div className="mt-3 flex gap-3">
                           <Select value={roleDraft} onChange={(e) => setRoleDraft(e.target.value as UserRole)} disabled={busy}>
                             <option value="user">user</option>
                             <option value="moderator">moderator</option>
+                            <option value="infraestructura">infraestructura</option>
+                            <option value="formacion">formacion</option>
                           </Select>
                           <Button type="button" onClick={onSaveRole} disabled={busy || !roleDraft || roleDraft === selectedUser.role}>
                             Guardar
@@ -2095,6 +2228,78 @@ export function AdminPanel({
                         Guardar cambios
                       </Button>
                     </div>
+                  </ControlBase>
+
+                  <ControlBase className="p-4">
+                    <p className="text-sm font-medium text-foreground">Instructores del curso</p>
+                    <p className="mt-1 text-xs text-foreground/70">Asignar usuarios con rol <span className="font-medium">formacion</span> para que puedan aprobar este curso.</p>
+
+                    {selectedCourseId ? (
+                      <>
+                        <div className="mt-4 space-y-2">
+                          {courseInstructors.length ? (
+                            <ul className="space-y-2">
+                              {courseInstructors.map((row) => (
+                                <li key={row.id} className="flex items-center justify-between gap-3 rounded-xl border border-foreground/10 bg-background/20 px-3 py-2">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium text-foreground">
+                                      {row.user?.name ?? "(sin usuario)"}
+                                    </p>
+                                    <p className="truncate text-xs text-foreground/60">
+                                      {row.user ? `ID ${row.user.id} — ${row.user.email}` : ""}
+                                    </p>
+                                  </div>
+                                  {row.user ? (
+                                    <Button
+                                      type="button"
+                                      variant="subtle"
+                                      onClick={() => onRemoveCourseInstructor(row.user!.id)}
+                                      disabled={busy}
+                                      className="px-3 py-2 text-xs"
+                                    >
+                                      Quitar
+                                    </Button>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-sm text-foreground/70">Sin instructores asignados.</p>
+                          )}
+                        </div>
+
+                        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <div className="flex-1">
+                            <Select
+                              value={courseInstructorUserId}
+                              onChange={(e) => setCourseInstructorUserId(Number(e.target.value))}
+                              disabled={busy}
+                            >
+                              <option value="">Seleccionar instructor…</option>
+                              {users
+                                .filter((u) => u.role === "formacion")
+                                .slice()
+                                .sort((a, b) => a.name.localeCompare(b.name))
+                                .map((u) => (
+                                  <option key={u.id} value={u.id}>
+                                    {u.name} (ID {u.id})
+                                  </option>
+                                ))}
+                            </Select>
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={onAddCourseInstructor}
+                            disabled={busy || !courseInstructorUserId}
+                            className="sm:w-40"
+                          >
+                            Asignar
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="mt-3 text-sm text-foreground/70">Seleccioná un curso.</p>
+                    )}
                   </ControlBase>
 
                   <ControlBase className="p-4">

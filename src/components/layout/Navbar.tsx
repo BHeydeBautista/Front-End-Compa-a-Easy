@@ -63,7 +63,10 @@ export function Navbar() {
   const displayName =
     (session?.user as any)?.name ?? (session?.user as any)?.email ?? "Usuario";
   const role = (session?.user as any)?.role as string | undefined;
-  const isSuperAdmin = (role ?? "").toLowerCase() === "super_admin";
+  const normalizedRole = (role ?? "").toLowerCase();
+  const isSuperAdmin = normalizedRole === "super_admin";
+  const isInfraestructura = normalizedRole === "infraestructura";
+  const isFormacion = normalizedRole === "formacion";
   const initials = useMemo(() => getInitials(String(displayName)), [displayName]);
 
   return (
@@ -139,6 +142,28 @@ export function Navbar() {
                     className="block px-4 py-3 text-sm text-foreground transition-colors hover:bg-foreground/5"
                   >
                     Panel de administrador
+                  </Link>
+                ) : null}
+
+                {isInfraestructura ? (
+                  <Link
+                    href="/dashboard/infraestructura"
+                    role="menuitem"
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-4 py-3 text-sm text-foreground transition-colors hover:bg-foreground/5"
+                  >
+                    Panel de asistencias
+                  </Link>
+                ) : null}
+
+                {isFormacion ? (
+                  <Link
+                    href="/dashboard/formacion"
+                    role="menuitem"
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-4 py-3 text-sm text-foreground transition-colors hover:bg-foreground/5"
+                  >
+                    Panel de formación
                   </Link>
                 ) : null}
                 <button

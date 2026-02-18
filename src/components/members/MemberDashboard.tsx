@@ -107,6 +107,8 @@ export function MemberDashboard(props: {
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
   const cloudinaryReady = Boolean(cloudName && uploadPreset);
 
+  const mediaEditingEnabled = false;
+
   const [pendingImage, setPendingImage] = useState<
     | null
     | {
@@ -380,6 +382,12 @@ export function MemberDashboard(props: {
   });
 
   async function openEditor(kind: "avatar" | "background", file: File) {
+    if (!mediaEditingEnabled) {
+      const msg = "La edición de avatar/fondo está deshabilitada por ahora.";
+      if (kind === "avatar") setAvatarError(msg);
+      else setBackgroundError(msg);
+      return;
+    }
     if (!cloudinaryReady) {
       const msg = "Cloudinary no está configurado.";
       if (kind === "avatar") setAvatarError(msg);
@@ -445,7 +453,7 @@ export function MemberDashboard(props: {
         />
       ) : null}
 
-      {!readOnly ? (
+      {!readOnly && mediaEditingEnabled ? (
         <>
           <input
             ref={backgroundPickerRef}
@@ -553,7 +561,7 @@ export function MemberDashboard(props: {
                   >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.10),transparent_60%)]" aria-hidden="true" />
                     <div className="relative aspect-[4/3] group/avatar">
-                      {!readOnly ? (
+                      {!readOnly && mediaEditingEnabled ? (
                         <>
                           <input
                             ref={avatarPickerRef}

@@ -513,6 +513,7 @@ export function AdminPanel({
   const [attendanceNewDate, setAttendanceNewDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
   const [attendanceNewType, setAttendanceNewType] = React.useState<AttendanceType>("mission");
   const [attendanceIncludeInactive, setAttendanceIncludeInactive] = React.useState(false);
+  const [attendanceUserSearch, setAttendanceUserSearch] = React.useState("");
 
   const loadBase = React.useCallback(async () => {
     if (!accessToken) return;
@@ -690,6 +691,25 @@ export function AdminPanel({
   React.useEffect(() => {
     loadAttendanceUsers();
   }, [loadAttendanceUsers]);
+
+  const filteredAttendanceUsers = React.useMemo(() => {
+    if (!attendanceSessionUsers) return [];
+    const q = attendanceUserSearch.trim().toLowerCase();
+    if (!q) return attendanceSessionUsers.users;
+    return attendanceSessionUsers.users.filter((u) => {
+      return (
+        String(u.name ?? "").toLowerCase().includes(q) ||
+        String(u.email ?? "").toLowerCase().includes(q) ||
+        String(u.id).includes(q)
+      );
+    });
+  }, [attendanceSessionUsers, attendanceUserSearch]);
+
+  const chartSessions = React.useMemo(() => {
+    // sessions are returned DESC; show a recent window in chronological order
+    const window = attendanceSessions.slice(0, 28).slice().reverse();
+    return window;
+  }, [attendanceSessions]);
 
   React.useEffect(() => {
     loadApproved();
@@ -1667,6 +1687,49 @@ export function AdminPanel({
 
                 <div className="mt-5 grid grid-cols-1 gap-4">
                   <ControlBase className="p-4">
+                    <p className="text-sm font-medium text-foreground">Gráfico</p>
+                    <p className="mt-1 text-xs text-foreground/70">Cantidad de miembros por sesión. Tocá una barra para seleccionar.</p>
+
+                    {chartSessions.length ? (
+                      <div className="mt-4">
+                        <div className="flex items-end gap-1 rounded-2xl border border-foreground/10 bg-background/20 p-3">
+                          {(() => {
+                            const max = Math.max(1, ...chartSessions.map((s) => s.presentCount));
+                            return chartSessions.map((s) => {
+                              const active = s.id === attendanceSelectedSessionId;
+                              const h = Math.round((s.presentCount / max) * 72);
+                              const label = s.date.slice(5);
+                              return (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => setAttendanceSelectedSessionId(s.id)}
+                                  className={cn(
+                                    "flex w-6 flex-col items-center justify-end gap-1 rounded-lg px-1 py-1 transition-colors",
+                                    active ? "bg-foreground/10" : "hover:bg-foreground/5",
+                                  )}
+                                  title={`${s.date} — ${s.type === "mission" ? "Misión" : "Entrenamiento"}: ${s.presentCount}`}
+                                >
+                                  <div
+                                    className={cn(
+                                      "w-full rounded-md border border-foreground/10",
+                                      active ? "bg-foreground/60" : "bg-foreground/30",
+                                    )}
+                                    style={{ height: Math.max(2, h) }}
+                                  />
+                                  <span className="text-[10px] text-foreground/60">{label}</span>
+                                </button>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-foreground/70">No hay sesiones todavía.</p>
+                    )}
+                  </ControlBase>
+
+                  <ControlBase className="p-4">
                     <p className="text-sm font-medium text-foreground">Crear sesión</p>
                     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                       <div className="space-y-2">
@@ -1745,8 +1808,27 @@ export function AdminPanel({
 
                     <div className="mt-5">
                       {attendanceSessionUsers ? (
-                        <div className="grid grid-cols-1 divide-y divide-foreground/10 overflow-hidden rounded-2xl border border-foreground/10">
-                          {attendanceSessionUsers.users.map((u) => (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="space-y-2">
+                              <FieldLabel>Buscar miembro</FieldLabel>
+                              <Input
+                                placeholder="Nombre, email o ID…"
+                                value={attendanceUserSearch}
+                                onChange={(e) => setAttendanceUserSearch(e.target.value)}
+                                disabled={busy}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <FieldLabel>Lista</FieldLabel>
+                              <div className="rounded-xl border border-foreground/10 bg-background/20 px-3 py-2 text-sm text-foreground/80">
+                                {filteredAttendanceUsers.length} resultado(s)
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 divide-y divide-foreground/10 overflow-hidden rounded-2xl border border-foreground/10">
+                          {filteredAttendanceUsers.map((u) => (
                             <div key={u.id} className="bg-background px-4 py-3">
                               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="min-w-0">
@@ -1759,24 +1841,25 @@ export function AdminPanel({
                                 </div>
 
                                 <div className="flex items-center gap-2">
+                                  <label className="flex items-center gap-2 text-xs text-foreground/70">
+                                    <input
+                                      type="checkbox"
+                                      checked={u.present}
+                                      onChange={() => onToggleAttendance(u.id, u.present)}
+                                      disabled={busy}
+                                    />
+                                    Asistió
+                                  </label>
                                   {u.present ? (
                                     <Pill className="border-emerald-400/30 bg-emerald-500/10 text-emerald-200">Confirmado</Pill>
                                   ) : (
                                     <Pill className="border-foreground/10 bg-background/30 text-foreground/70">Sin confirmar</Pill>
                                   )}
-                                  <Button
-                                    type="button"
-                                    variant={u.present ? "subtle" : "default"}
-                                    onClick={() => onToggleAttendance(u.id, u.present)}
-                                    disabled={busy}
-                                    className="px-3 py-2 text-xs"
-                                  >
-                                    {u.present ? "Quitar" : "Confirmar"}
-                                  </Button>
                                 </div>
                               </div>
                             </div>
                           ))}
+                          </div>
                         </div>
                       ) : (
                         <p className="text-sm text-foreground/70">No hay sesión seleccionada.</p>

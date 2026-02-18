@@ -27,8 +27,16 @@ type User = {
 type Rank = {
   id: number;
   name: string;
+  division?: string | null;
   sortOrder: number;
 };
+
+type RankDivision = "fenix" | "pegasus";
+
+const rankDivisionOptions: Array<{ value: RankDivision; label: string }> = [
+  { value: "fenix", label: "Fenix" },
+  { value: "pegasus", label: "Pegasus" },
+];
 
 type Course = {
   id: number;
@@ -522,11 +530,11 @@ export function AdminPanel({
   const [courseInstructors, setCourseInstructors] = React.useState<CourseInstructorRow[]>([]);
   const [courseInstructorUserId, setCourseInstructorUserId] = React.useState<number | "">("");
 
-  const [rankEdit, setRankEdit] = React.useState<{ name: string; sortOrder: string }>(
-    { name: "", sortOrder: "0" },
+  const [rankEdit, setRankEdit] = React.useState<{ name: string; division: RankDivision; sortOrder: string }>(
+    { name: "", division: "fenix", sortOrder: "0" },
   );
-  const [rankNew, setRankNew] = React.useState<{ name: string; sortOrder: string }>(
-    { name: "", sortOrder: "0" },
+  const [rankNew, setRankNew] = React.useState<{ name: string; division: RankDivision; sortOrder: string }>(
+    { name: "", division: "fenix", sortOrder: "0" },
   );
 
   const [rankUnlocks, setRankUnlocks] = React.useState<RankUnlockRow[]>([]);
@@ -802,13 +810,20 @@ export function AdminPanel({
 
   React.useEffect(() => {
     if (!selectedRank) {
-      setRankEdit({ name: "", sortOrder: "0" });
+      setRankEdit({ name: "", division: "fenix", sortOrder: "0" });
       setRankUnlocks([]);
       setRankUnlockCourseId("");
       return;
     }
+
+    const selectedDivision =
+      String(selectedRank.division ?? "fenix").toLowerCase() === "pegasus"
+        ? "pegasus"
+        : "fenix";
+
     setRankEdit({
       name: selectedRank.name ?? "",
+      division: selectedDivision,
       sortOrder: String(selectedRank.sortOrder ?? 0),
     });
     setRankUnlockCourseId("");
@@ -1348,12 +1363,12 @@ export function AdminPanel({
       const created = await apiFetch<Rank>(`${backendBaseUrl}/ranks`, {
         accessToken,
         method: "POST",
-        body: { name, sortOrder },
+        body: { name, division: rankNew.division, sortOrder },
       });
-      setRankNew({ name: "", sortOrder: "0" });
+      setRankNew({ name: "", division: "fenix", sortOrder: "0" });
       await loadBase();
       setSelectedRankId(created.id);
-      logAudit("Crear rango", `${created.name} — Nivel ${created.sortOrder}`);
+      logAudit("Crear rango", `${created.name} — ${created.division ?? rankNew.division} — Nivel ${created.sortOrder}`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1370,6 +1385,9 @@ export function AdminPanel({
 
     const patch: Partial<Rank> = {};
     if (name !== selectedRank.name) patch.name = name;
+    if (rankEdit.division !== String(selectedRank.division ?? "fenix").toLowerCase()) {
+      patch.division = rankEdit.division;
+    }
     if (sortOrder !== selectedRank.sortOrder) patch.sortOrder = sortOrder;
     if (Object.keys(patch).length === 0) return;
 
@@ -1771,7 +1789,7 @@ export function AdminPanel({
                               .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.id - b.id))
                               .map((r) => (
                                 <option key={r.id} value={r.id}>
-                                  {r.name}
+                                  {r.name} ({String(r.division ?? "fenix")})
                                 </option>
                               ))}
                           </Select>
@@ -2341,6 +2359,7 @@ export function AdminPanel({
                           <th className="px-4 py-3 text-xs font-semibold">Insignia</th>
                           <th className="px-4 py-3 text-xs font-semibold">Categoría</th>
                           <th className="px-4 py-3 text-xs font-semibold">Rango</th>
+                          <th className="px-4 py-3 text-xs font-semibold">División</th>
                           <th className="px-4 py-3 text-xs font-semibold">Nivel</th>
                         </tr>
                       </thead>
@@ -2351,10 +2370,21 @@ export function AdminPanel({
                           .map((r) => (
                             <tr key={r.id} className="bg-background transition-colors hover:bg-foreground/5">
                               <td className="px-4 py-3">
-                                <RankInsigniaCell rankName={r.name} />
+                                <div className="flex items-center justify-center">
+                                  <div className="relative h-12 w-12">
+                                    <Image
+                                      src={resolveRankImage(r.name, r.division ?? null)}
+                                      alt={`Insignia ${r.name}`}
+                                      fill
+                                      sizes="48px"
+                                      className="object-contain"
+                                    />
+                                  </div>
+                                </div>
                               </td>
                               <td className="px-4 py-3 text-foreground/70">{guessRankCategory(r.name) || "—"}</td>
                               <td className="px-4 py-3 font-semibold text-foreground">{r.name}</td>
+                              <td className="px-4 py-3 text-foreground/70">{String(r.division ?? "fenix")}</td>
                               <td className="px-4 py-3 text-foreground/70">Nivel {r.sortOrder}</td>
                             </tr>
                           ))}
@@ -2376,7 +2406,7 @@ export function AdminPanel({
                             .sort((a, b) => (b.sortOrder - a.sortOrder) || (a.id - b.id))
                             .map((r) => (
                               <option key={r.id} value={r.id}>
-                                {r.name} — Nivel {r.sortOrder}
+                                {r.name} ({String(r.division ?? "fenix")}) — Nivel {r.sortOrder}
                               </option>
                             ))}
                         </Select>
@@ -2386,6 +2416,20 @@ export function AdminPanel({
                         <div className="space-y-2">
                           <FieldLabel>Nombre</FieldLabel>
                           <Input value={rankEdit.name} onChange={(e) => setRankEdit((s) => ({ ...s, name: e.target.value }))} disabled={busy || !selectedRank} />
+                        </div>
+                        <div className="space-y-2">
+                          <FieldLabel>División</FieldLabel>
+                          <Select
+                            value={rankEdit.division}
+                            onChange={(e) => setRankEdit((s) => ({ ...s, division: e.target.value as RankDivision }))}
+                            disabled={busy || !selectedRank}
+                          >
+                            {rankDivisionOptions.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </Select>
                         </div>
                         <div className="space-y-2">
                           <FieldLabel>Nivel</FieldLabel>
@@ -2476,6 +2520,20 @@ export function AdminPanel({
                         <div className="space-y-2">
                           <FieldLabel>Nombre</FieldLabel>
                           <Input value={rankNew.name} onChange={(e) => setRankNew((s) => ({ ...s, name: e.target.value }))} disabled={busy} />
+                        </div>
+                        <div className="space-y-2">
+                          <FieldLabel>División</FieldLabel>
+                          <Select
+                            value={rankNew.division}
+                            onChange={(e) => setRankNew((s) => ({ ...s, division: e.target.value as RankDivision }))}
+                            disabled={busy}
+                          >
+                            {rankDivisionOptions.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </Select>
                         </div>
                         <div className="space-y-2">
                           <FieldLabel>Nivel</FieldLabel>

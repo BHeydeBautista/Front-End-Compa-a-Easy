@@ -56,20 +56,21 @@ export default async function MiembrosPage() {
 
     if (response.ok) {
       const data = (await response.json()) as PublicMemberResponse[];
-      members = (data ?? [])
-        .map((u) => {
-          const type = mapCategory(u.category);
-          if (!type) return null;
-          const division = u.division ?? "";
-          const rank = coerceRank(u.rank?.name);
-          return {
+      members = (data ?? []).flatMap((u) => {
+        const type = mapCategory(u.category);
+        if (!type) return [];
+        const division = u.division ?? "";
+        const rank = coerceRank(u.rank?.name);
+        return [
+          {
+            id: u.id,
             name: u.name,
             type,
             division,
             rank,
-          } satisfies ActiveMemberInput;
-        })
-        .filter((x): x is ActiveMemberInput => Boolean(x));
+          } satisfies ActiveMemberInput,
+        ];
+      });
     }
   } catch {
     members = [];

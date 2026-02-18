@@ -38,6 +38,7 @@ export const buildRankGroups = (members: CompanyMember[]): RankGroup[] => {
 
 export const buildCategoryGroups = (inputs = activeMembers): CategoryGroup[] => {
   const memberList: CompanyMember[] = inputs.map((m) => ({
+    id: m.id,
     name: m.name.trim(),
     rank: m.rank,
     type: m.type,

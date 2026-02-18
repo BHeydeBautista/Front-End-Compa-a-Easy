@@ -1,4 +1,7 @@
+"use client";
+
 import ThreeDCard from "@/components/ui/three-d-card";
+import Link from "next/link";
 import type { CompanyMember } from "../types";
 import ReserveBadge from "./ReserveBadge";
 
@@ -75,6 +78,15 @@ export default function MemberCard({ member }: { member: CompanyMember }) {
         {member.rank.toUpperCase()}
       </p>
       <h3 className="mt-2 text-xl font-semibold tracking-tight text-foreground">{member.name}</h3>
+
+      {typeof member.id === "number" && member.id > 0 ? (
+        <Link
+          href={`/usuario/${member.id}`}
+          className="mt-2 text-sm font-semibold text-foreground/70 hover:text-foreground"
+        >
+          Ver perfil
+        </Link>
+      ) : null}
 
       {member.reserve ? (
         <div className="mt-3">

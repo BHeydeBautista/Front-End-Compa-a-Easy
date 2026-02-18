@@ -15,6 +15,7 @@ export type Rank =
   | "Aspirante";
 
 export type CompanyMember = {
+  id?: number;
   name: string;
   rank: Rank;
   type: MemberType;
@@ -48,6 +49,7 @@ export type CategoryGroup =
     };
 
 export type ActiveMemberInput = {
+  id?: number;
   name: string;
   rank: Rank;
   type: MemberType;

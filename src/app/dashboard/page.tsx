@@ -117,6 +117,14 @@ function prettyDivision(value: string | null | undefined) {
   return value ?? "";
 }
 
+function prettyCategory(value: string | null | undefined) {
+  const v = String(value ?? "").toLowerCase();
+  if (v === "oficial") return "Oficial";
+  if (v === "suboficial") return "SubOficial";
+  if (v === "enlistado") return "Enlistado";
+  return "";
+}
+
 function resolveRankImage(rankName: string | null | undefined) {
   const rawName = String(rankName ?? "").trim();
   if (!rawName) {
@@ -226,6 +234,7 @@ export default async function DashboardPage() {
         rango: rankName || "Sin rango",
         rangoImg: resolveRankImage(rankName),
         division: prettyDivision(data.user?.division),
+        categoria: prettyCategory(data.user?.category),
         cursosAprobados: approvedCourses.map((c) => c.code).filter(Boolean),
         asistencias: {
           misiones: Number(data.user?.missionAttendanceCount ?? 0),

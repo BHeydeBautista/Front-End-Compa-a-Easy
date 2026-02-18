@@ -28,7 +28,7 @@ export function RankBlock({ group }: { group: RankGroup }) {
         <div className="flex justify-center">
           {group.members.map((member, index) => (
             <div
-              key={`${group.rank}-${member.name}`}
+              key={`${group.rank}-${member.id ?? member.name}`}
               className="animate-fade-in-up flex w-full justify-center"
               style={{ animationDelay: `${index * 0.06}s` }}
             >
@@ -40,7 +40,7 @@ export function RankBlock({ group }: { group: RankGroup }) {
         <div className="mx-auto grid w-full max-w-5xl grid-cols-1 justify-items-center gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {group.members.map((member, index) => (
             <div
-              key={`${group.rank}-${member.name}`}
+              key={`${group.rank}-${member.id ?? member.name}`}
               className="animate-fade-in-up flex w-full justify-center"
               style={{ animationDelay: `${index * 0.06}s` }}
             >
@@ -87,7 +87,7 @@ export function RankBlockCustom({
         <div className="flex justify-center">
           {members.map((member, index) => (
             <div
-              key={`${title}-${member.name}`}
+              key={`${title}-${member.id ?? member.name}`}
               className="animate-fade-in-up flex w-full justify-center"
               style={{ animationDelay: `${index * 0.06}s` }}
             >
@@ -99,7 +99,7 @@ export function RankBlockCustom({
         <div className="mx-auto grid w-full max-w-5xl grid-cols-1 justify-items-center gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {members.map((member, index) => (
             <div
-              key={`${title}-${member.name}`}
+              key={`${title}-${member.id ?? member.name}`}
               className="animate-fade-in-up flex w-full justify-center"
               style={{ animationDelay: `${index * 0.06}s` }}
             >

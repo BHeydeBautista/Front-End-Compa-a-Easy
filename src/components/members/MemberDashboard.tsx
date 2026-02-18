@@ -21,6 +21,7 @@ type Member = {
   rangoImg: string;
   insigniaAlt?: string;
   division?: string;
+  categoria?: string;
   cursosAprobados: string[];
   asistencias: {
     misiones: number;
@@ -45,12 +46,23 @@ export function MemberDashboard(props: {
   };
   courseCatalog: MemberDashboardCourseCatalog;
   courseLogos: Record<string, string>;
+  readOnly?: boolean;
+  showPrivateDetails?: boolean;
 }) {
   const reduceMotion = useReducedMotion();
   const router = useRouter();
   const ease = [0.22, 1, 0.36, 1] as const;
 
-  const { bgSrc, member, profile, api, courseCatalog, courseLogos } = props;
+  const {
+    bgSrc,
+    member,
+    profile,
+    api,
+    courseCatalog,
+    courseLogos,
+    readOnly = false,
+    showPrivateDetails = true,
+  } = props;
 
   const [form, setForm] = useState(() => ({
     name: profile.name ?? "",
@@ -69,11 +81,13 @@ export function MemberDashboard(props: {
   const labelClassName = "text-xs font-semibold tracking-[0.14em] text-foreground/70 uppercase";
 
   const canSubmit = useMemo(() => {
+    if (readOnly) return false;
     if (saving) return false;
     return form.name.trim().length > 0;
-  }, [form.name, saving]);
+  }, [form.name, readOnly, saving]);
 
   async function onSaveProfile() {
+    if (readOnly) return;
     if (!canSubmit) return;
 
     setSaving(true);
@@ -219,8 +233,10 @@ export function MemberDashboard(props: {
                     <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight text-foreground">
                       {member.nombre}
                     </h1>
-                    {member.division ? (
-                      <p className="mt-1 text-sm font-semibold text-foreground/70">{member.division}</p>
+                    {member.division || member.categoria ? (
+                      <p className="mt-1 text-sm font-semibold text-foreground/70">
+                        {[member.division, member.categoria].filter(Boolean).join(" • ")}
+                      </p>
                     ) : null}
                   </div>
                 </div>
@@ -251,146 +267,207 @@ export function MemberDashboard(props: {
               </div>
             </motion.section>
 
-            {/* Stats under identity */}
-            <motion.section
-              variants={item}
-              className={cn(
-                "relative overflow-hidden",
-                "bg-background/30 backdrop-blur supports-[backdrop-filter]:bg-background/20",
-                "border border-foreground/10",
-                "rounded-2xl"
-              )}
-            >
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),transparent_55%)]" aria-hidden="true" />
-              <div className="relative p-6">
-                <p className="text-sm font-semibold text-foreground">Asistencia a misiones</p>
-                <div className="mt-4 flex items-baseline gap-3">
-                  <p className="text-5xl font-semibold tracking-tight text-foreground">{member.asistencias.misiones}</p>
-                  <p className="text-sm font-semibold tracking-wide text-foreground/70">MISIONES</p>
-                </div>
-              </div>
-            </motion.section>
-
-            <motion.section
-              variants={item}
-              className={cn(
-                "relative overflow-hidden",
-                "bg-background/30 backdrop-blur supports-[backdrop-filter]:bg-background/20",
-                "border border-foreground/10",
-                "rounded-2xl"
-              )}
-            >
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),transparent_55%)]" aria-hidden="true" />
-              <div className="relative p-6">
-                <p className="text-sm font-semibold text-foreground">Entrenamientos realizados</p>
-                <div className="mt-4 flex items-baseline gap-3">
-                  <p className="text-5xl font-semibold tracking-tight text-foreground">
-                    {member.asistencias.entrenamientos}
-                  </p>
-                  <p className="text-sm font-semibold tracking-wide text-foreground/70">SESIONES</p>
-                </div>
-              </div>
-            </motion.section>
-
-            {/* Profile settings */}
-            <motion.section
-              variants={item}
-              className={cn(
-                "relative overflow-hidden",
-                "bg-background/30 backdrop-blur supports-[backdrop-filter]:bg-background/20",
-                "border border-foreground/10",
-                "rounded-2xl"
-              )}
-            >
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),transparent_55%)]" aria-hidden="true" />
-              <div className="relative p-6">
-                <p className="text-sm font-semibold text-foreground">Datos del perfil</p>
-                <p className="mt-1 text-xs font-semibold tracking-wide text-foreground/60">
-                  Actualizá tu nombre y datos de contacto.
-                </p>
-
-                <div className="mt-5 grid gap-4">
-                  <div>
-                    <label className={labelClassName} htmlFor="profile-name">Nombre</label>
-                    <input
-                      id="profile-name"
-                      className={inputClassName}
-                      value={form.name}
-                      onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                      placeholder="Tu nombre"
-                      autoComplete="name"
-                    />
+            {showPrivateDetails ? (
+              <>
+                {/* Stats under identity */}
+                <motion.section
+                  variants={item}
+                  className={cn(
+                    "relative overflow-hidden",
+                    "bg-background/30 backdrop-blur supports-[backdrop-filter]:bg-background/20",
+                    "border border-foreground/10",
+                    "rounded-2xl"
+                  )}
+                >
+                  <div
+                    className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),transparent_55%)]"
+                    aria-hidden="true"
+                  />
+                  <div className="relative p-6">
+                    <p className="text-sm font-semibold text-foreground">Asistencia a misiones</p>
+                    <div className="mt-4 flex items-baseline gap-3">
+                      <p className="text-5xl font-semibold tracking-tight text-foreground">
+                        {member.asistencias.misiones}
+                      </p>
+                      <p className="text-sm font-semibold tracking-wide text-foreground/70">MISIONES</p>
+                    </div>
                   </div>
+                </motion.section>
 
-                  <div>
-                    <label className={labelClassName} htmlFor="profile-phone">Número de teléfono</label>
-                    <input
-                      id="profile-phone"
-                      className={inputClassName}
-                      value={form.phoneNumber}
-                      onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
-                      placeholder="Ej: +54 11 1234 5678"
-                      autoComplete="tel"
-                    />
+                <motion.section
+                  variants={item}
+                  className={cn(
+                    "relative overflow-hidden",
+                    "bg-background/30 backdrop-blur supports-[backdrop-filter]:bg-background/20",
+                    "border border-foreground/10",
+                    "rounded-2xl"
+                  )}
+                >
+                  <div
+                    className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),transparent_55%)]"
+                    aria-hidden="true"
+                  />
+                  <div className="relative p-6">
+                    <p className="text-sm font-semibold text-foreground">Entrenamientos realizados</p>
+                    <div className="mt-4 flex items-baseline gap-3">
+                      <p className="text-5xl font-semibold tracking-tight text-foreground">
+                        {member.asistencias.entrenamientos}
+                      </p>
+                      <p className="text-sm font-semibold tracking-wide text-foreground/70">SESIONES</p>
+                    </div>
                   </div>
+                </motion.section>
 
-                  <div>
-                    <label className={labelClassName} htmlFor="profile-discord">Discord</label>
-                    <input
-                      id="profile-discord"
-                      className={inputClassName}
-                      value={form.discord}
-                      onChange={(e) => setForm((prev) => ({ ...prev, discord: e.target.value }))}
-                      placeholder="Ej: usuario#1234"
-                      autoComplete="off"
-                    />
+                {/* Profile settings */}
+                <motion.section
+                  variants={item}
+                  className={cn(
+                    "relative overflow-hidden",
+                    "bg-background/30 backdrop-blur supports-[backdrop-filter]:bg-background/20",
+                    "border border-foreground/10",
+                    "rounded-2xl"
+                  )}
+                >
+                  <div
+                    className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),transparent_55%)]"
+                    aria-hidden="true"
+                  />
+                  <div className="relative p-6">
+                    <p className="text-sm font-semibold text-foreground">Datos del perfil</p>
+                    <p className="mt-1 text-xs font-semibold tracking-wide text-foreground/60">
+                      {readOnly
+                        ? "Información del perfil del miembro."
+                        : "Actualizá tu nombre y datos de contacto."}
+                    </p>
+
+                    <div className="mt-5 grid gap-4">
+                      <div>
+                        <label className={labelClassName} htmlFor="profile-name">
+                          Nombre
+                        </label>
+                        <input
+                          id="profile-name"
+                          className={inputClassName}
+                          value={form.name}
+                          onChange={
+                            readOnly ? undefined : (e) => setForm((prev) => ({ ...prev, name: e.target.value }))
+                          }
+                          placeholder="Tu nombre"
+                          autoComplete="name"
+                          disabled={readOnly}
+                          readOnly={readOnly}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={labelClassName} htmlFor="profile-phone">
+                          Número de teléfono
+                        </label>
+                        <input
+                          id="profile-phone"
+                          className={inputClassName}
+                          value={form.phoneNumber}
+                          onChange={
+                            readOnly
+                              ? undefined
+                              : (e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))
+                          }
+                          placeholder="Ej: +54 11 1234 5678"
+                          autoComplete="tel"
+                          disabled={readOnly}
+                          readOnly={readOnly}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={labelClassName} htmlFor="profile-discord">
+                          Discord
+                        </label>
+                        <input
+                          id="profile-discord"
+                          className={inputClassName}
+                          value={form.discord}
+                          onChange={
+                            readOnly
+                              ? undefined
+                              : (e) => setForm((prev) => ({ ...prev, discord: e.target.value }))
+                          }
+                          placeholder="Ej: usuario#1234"
+                          autoComplete="off"
+                          disabled={readOnly}
+                          readOnly={readOnly}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={labelClassName} htmlFor="profile-steam">
+                          Steam
+                        </label>
+                        <input
+                          id="profile-steam"
+                          className={inputClassName}
+                          value={form.steamName}
+                          onChange={
+                            readOnly
+                              ? undefined
+                              : (e) => setForm((prev) => ({ ...prev, steamName: e.target.value }))
+                          }
+                          placeholder="Nombre en Steam"
+                          autoComplete="off"
+                          disabled={readOnly}
+                          readOnly={readOnly}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={labelClassName} htmlFor="profile-whatsapp">
+                          WhatsApp
+                        </label>
+                        <input
+                          id="profile-whatsapp"
+                          className={inputClassName}
+                          value={form.whatsappName}
+                          onChange={
+                            readOnly
+                              ? undefined
+                              : (e) => setForm((prev) => ({ ...prev, whatsappName: e.target.value }))
+                          }
+                          placeholder="Nombre en WhatsApp"
+                          autoComplete="off"
+                          disabled={readOnly}
+                          readOnly={readOnly}
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        {!readOnly ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={!canSubmit}
+                              onClick={onSaveProfile}
+                              className={cn(
+                                "inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors",
+                                canSubmit
+                                  ? "bg-foreground text-background hover:bg-foreground/90"
+                                  : "bg-foreground/20 text-foreground/50 cursor-not-allowed"
+                              )}
+                            >
+                              {saving ? "Guardando..." : "Guardar"}
+                            </button>
+
+                            {saveOk ? <p className="text-xs font-semibold text-foreground/70">{saveOk}</p> : null}
+                            {saveError ? (
+                              <p className="text-xs font-semibold text-destructive">{saveError}</p>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
-
-                  <div>
-                    <label className={labelClassName} htmlFor="profile-steam">Steam</label>
-                    <input
-                      id="profile-steam"
-                      className={inputClassName}
-                      value={form.steamName}
-                      onChange={(e) => setForm((prev) => ({ ...prev, steamName: e.target.value }))}
-                      placeholder="Nombre en Steam"
-                      autoComplete="off"
-                    />
-                  </div>
-
-                  <div>
-                    <label className={labelClassName} htmlFor="profile-whatsapp">WhatsApp</label>
-                    <input
-                      id="profile-whatsapp"
-                      className={inputClassName}
-                      value={form.whatsappName}
-                      onChange={(e) => setForm((prev) => ({ ...prev, whatsappName: e.target.value }))}
-                      placeholder="Nombre en WhatsApp"
-                      autoComplete="off"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={!canSubmit}
-                      onClick={onSaveProfile}
-                      className={cn(
-                        "inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors",
-                        canSubmit
-                          ? "bg-foreground text-background hover:bg-foreground/90"
-                          : "bg-foreground/20 text-foreground/50 cursor-not-allowed"
-                      )}
-                    >
-                      {saving ? "Guardando..." : "Guardar"}
-                    </button>
-
-                    {saveOk ? <p className="text-xs font-semibold text-foreground/70">{saveOk}</p> : null}
-                    {saveError ? <p className="text-xs font-semibold text-destructive">{saveError}</p> : null}
-                  </div>
-                </div>
-              </div>
-            </motion.section>
+                </motion.section>
+              </>
+            ) : null}
           </div>
 
           {/* Courses */}
@@ -413,9 +490,11 @@ export function MemberDashboard(props: {
                   <p className="text-xs font-semibold tracking-wide text-foreground/70">
                     {approvedCourses.length} COMPLETADOS
                   </p>
-                  <p className="mt-1 text-xs font-semibold tracking-wide text-foreground/60">
-                    {availableCourses.length} DISPONIBLES
-                  </p>
+                  {showPrivateDetails ? (
+                    <p className="mt-1 text-xs font-semibold tracking-wide text-foreground/60">
+                      {availableCourses.length} DISPONIBLES
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
@@ -470,56 +549,60 @@ export function MemberDashboard(props: {
                 </div>
               </div>
 
-              <div className="mt-6 border-t border-foreground/10 pt-5">
-                <p className="text-xs font-semibold tracking-[0.16em] text-foreground/70">CURSOS DISPONIBLES</p>
+              {showPrivateDetails ? (
+                <div className="mt-6 border-t border-foreground/10 pt-5">
+                  <p className="text-xs font-semibold tracking-[0.16em] text-foreground/70">CURSOS DISPONIBLES</p>
 
-                <div className="mt-4">
-                  <LayerStack cardWidth={360} cardGap={14} stageHeight={220}>
-                    {availableCourses.map((c) => (
-                      <Card
-                        key={c.abbr}
-                        className={cn(
-                          "relative overflow-hidden rounded-xl border border-foreground/10",
-                          "bg-background/20"
-                        )}
-                      >
-                        <div
-                          className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.08),transparent_55%)]"
-                          aria-hidden="true"
-                        />
-                        <div className="relative flex h-full items-center gap-3 p-4">
-                          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-foreground/10 bg-background/30">
-                            {c.logo ? (
-                              <Image
-                                src={c.logo}
-                                alt={c.abbr}
-                                fill
-                                sizes="48px"
-                                className="object-contain p-2 opacity-90"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-foreground/60">
+                  <div className="mt-4">
+                    <LayerStack cardWidth={360} cardGap={14} stageHeight={220}>
+                      {availableCourses.map((c) => (
+                        <Card
+                          key={c.abbr}
+                          className={cn(
+                            "relative overflow-hidden rounded-xl border border-foreground/10",
+                            "bg-background/20"
+                          )}
+                        >
+                          <div
+                            className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.08),transparent_55%)]"
+                            aria-hidden="true"
+                          />
+                          <div className="relative flex h-full items-center gap-3 p-4">
+                            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-foreground/10 bg-background/30">
+                              {c.logo ? (
+                                <Image
+                                  src={c.logo}
+                                  alt={c.abbr}
+                                  fill
+                                  sizes="48px"
+                                  className="object-contain p-2 opacity-90"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-foreground/60">
+                                  {c.abbr}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-semibold tracking-[0.18em] text-foreground/60">
                                 {c.abbr}
-                              </div>
-                            )}
-                          </div>
+                              </p>
+                              <p className="mt-1 whitespace-normal text-sm font-semibold leading-snug text-foreground/90">
+                                {c.name}
+                              </p>
+                            </div>
 
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-semibold tracking-[0.18em] text-foreground/60">{c.abbr}</p>
-                            <p className="mt-1 whitespace-normal text-sm font-semibold leading-snug text-foreground/90">
-                              {c.name}
-                            </p>
+                            <span className="inline-flex items-center rounded-full border border-foreground/10 bg-background/20 px-3 py-1 text-[11px] font-semibold text-foreground/70">
+                              DISP.
+                            </span>
                           </div>
-
-                          <span className="inline-flex items-center rounded-full border border-foreground/10 bg-background/20 px-3 py-1 text-[11px] font-semibold text-foreground/70">
-                            DISP.
-                          </span>
-                        </div>
-                      </Card>
-                    ))}
-                  </LayerStack>
+                        </Card>
+                      ))}
+                    </LayerStack>
+                  </div>
                 </div>
-              </div>
+              ) : null}
             </div>
           </motion.section>
         </div>

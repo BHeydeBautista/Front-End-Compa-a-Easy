@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @next/next/no-img-element */
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-import Link from "next/link";
-import { toAvatar } from "@/components/members/company-members-hierarchy/utils";
+import { rankInsignia } from "@/components/members/company-members-hierarchy/data";
+import { MemberDashboard, type MemberDashboardCourseCatalog } from "@/components/members/MemberDashboard";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -12,6 +11,7 @@ export const revalidate = 0;
 type PublicProfileResponse = {
   id: number;
   name: string;
+  category: string | null;
   division: string | null;
   rank: { id: number; name: string } | null;
   courses: {
@@ -24,6 +24,26 @@ function prettyDivision(value: string | null | undefined) {
   if (v === "fenix") return "Fenix";
   if (v === "pegasus") return "Pegasus";
   return value ?? "";
+}
+
+function prettyCategory(value: string | null | undefined) {
+  const v = String(value ?? "").toLowerCase();
+  if (v === "oficial") return "Oficial";
+  if (v === "suboficial") return "SubOficial";
+  if (v === "enlistado") return "Enlistado";
+  return "";
+}
+
+function resolveRankImage(rankName: string | null | undefined) {
+  const rawName = String(rankName ?? "").trim();
+  if (!rawName) {
+    return "/img/Rangos/Recluta.png";
+  }
+
+  const direct = (rankInsignia as unknown as Record<string, string>)[rawName];
+  if (direct) return direct;
+
+  return "/img/Rangos/Recluta.png";
 }
 
 export default async function UsuarioPerfilPublicoPage({
@@ -72,65 +92,46 @@ export default async function UsuarioPerfilPublicoPage({
   }
 
   const data = (await response.json()) as PublicProfileResponse;
-  const avatarUrl = toAvatar(data.name ?? "Usuario");
-  const division = prettyDivision(data.division);
+
   const approved = data.courses?.approved ?? [];
+  const courseCatalog: MemberDashboardCourseCatalog = {};
+  for (const c of approved) {
+    if (c?.code) courseCatalog[c.code] = c.name ?? c.code;
+  }
+
+  const rankName = data.rank?.name ?? "";
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-10">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Perfil</h1>
-          <p className="mt-1 text-sm text-foreground/70">Información pública del miembro.</p>
-        </div>
-        <Link
-          href="/dashboard"
-          className="text-sm font-semibold text-foreground/70 hover:text-foreground"
-        >
-          Volver
-        </Link>
-      </div>
-
-      <section className="mt-6 rounded-2xl border border-foreground/10 bg-background/30 p-6 backdrop-blur supports-[backdrop-filter]:bg-background/20">
-        <div className="flex items-start gap-5">
-          <div className="relative h-20 w-20 shrink-0">
-            <img
-              src={avatarUrl}
-              alt={`Avatar de ${data.name}`}
-              className="h-20 w-20 rounded-full object-cover border border-foreground/10 bg-foreground/5"
-              loading="lazy"
-              decoding="async"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.onerror = null;
-                target.src = toAvatar(data.name ?? "Usuario");
-              }}
-            />
-          </div>
-
-          <div className="min-w-0">
-            <h2 className="truncate text-xl font-semibold text-foreground">{data.name}</h2>
-            <p className="mt-1 text-sm font-semibold text-foreground/70">{data.rank?.name ?? "Sin rango"}</p>
-            {division ? <p className="mt-1 text-sm text-foreground/70">{division}</p> : null}
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-6 rounded-2xl border border-foreground/10 bg-background/30 p-6 backdrop-blur supports-[backdrop-filter]:bg-background/20">
-        <h3 className="text-sm font-semibold text-foreground">Cursos aprobados</h3>
-        {approved.length === 0 ? (
-          <p className="mt-2 text-sm text-foreground/70">Sin cursos aprobados.</p>
-        ) : (
-          <ul className="mt-3 grid gap-2">
-            {approved.map((c) => (
-              <li key={c.code} className="rounded-xl border border-foreground/10 bg-foreground/5 px-4 py-3">
-                <p className="text-sm font-semibold text-foreground">{c.code}</p>
-                <p className="mt-0.5 text-xs text-foreground/70">{c.name}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </main>
+    <MemberDashboard
+      bgSrc="/img/20260123233002_1.jpg"
+      member={{
+        nombre: data.name ?? "Usuario",
+        rango: rankName || "Sin rango",
+        rangoImg: resolveRankImage(rankName),
+        division: prettyDivision(data.division),
+        categoria: prettyCategory(data.category),
+        cursosAprobados: approved.map((c) => c.code).filter(Boolean),
+        asistencias: {
+          misiones: 0,
+          entrenamientos: 0,
+        },
+        escudoImg: "/brand/logo2.png",
+      }}
+      profile={{
+        name: data.name ?? "",
+        steamName: null,
+        whatsappName: null,
+        phoneNumber: null,
+        discord: null,
+      }}
+      api={{
+        backendBaseUrl,
+        accessToken,
+      }}
+      courseCatalog={courseCatalog}
+      courseLogos={{}}
+      readOnly
+      showPrivateDetails={false}
+    />
   );
 }

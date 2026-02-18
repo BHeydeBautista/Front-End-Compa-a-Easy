@@ -13,7 +13,8 @@ import type { NavbarFlowProps } from './types';
 import { ListItem } from './items';
 import { NavbarConnections } from './connections';
 
-const DESKTOP_BREAKPOINT = 768;
+// Use the mobile menu until `lg` to avoid cramped layouts on tablets.
+const DESKTOP_BREAKPOINT = 1024;
 
 function SubmenuClickWrapper({
   children,
@@ -127,7 +128,7 @@ const NavbarFlow: React.FC<NavbarFlowProps> = ({
 
   return (
     <div className={`sticky top-0 z-50 w-full ${styleName}`}>
-      <div className='hidden md:block'>
+      <div className='hidden lg:block'>
         <div className='relative mx-auto w-full max-w-6xl h-24 flex items-center justify-between px-4 sm:px-6'>
           <motion.div
             initial={{ opacity: 0, x: -50 }}
@@ -190,7 +191,7 @@ const NavbarFlow: React.FC<NavbarFlowProps> = ({
         </div>
       </div>
 
-      <div className='block md:hidden'>
+      <div className='block lg:hidden'>
         <div className='relative w-full border-b border-foreground/10 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/70'>
           <div className='mx-auto flex h-16 max-w-6xl items-center px-4 sm:px-6'>
             <motion.div

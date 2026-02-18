@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { MemberDashboard, type MemberDashboardCourseCatalog } from "@/components/members/MemberDashboard";
-import { rankInsignia } from "@/components/members/company-members-hierarchy/data";
 import { cloudinaryImageUrl } from "@/lib/cloudinary";
+import { resolveRankImage } from "@/lib/rank-images";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -107,12 +107,7 @@ function buildPublicImageIndex(rootRelativeToPublic: string) {
   return map;
 }
 
-const rankImageByKey = buildPublicImageIndex("img/Rangos");
 const courseLogoByKey = buildPublicImageIndex("img/Cursos");
-
-const rankInsigniaByNormalizedName: Record<string, string> = Object.fromEntries(
-  Object.entries(rankInsignia as unknown as Record<string, string>).map(([name, src]) => [normalizeKey(name), src])
-);
 
 function prettyDivision(value: string | null | undefined) {
   const v = String(value ?? "").toLowerCase();
@@ -127,23 +122,6 @@ function prettyCategory(value: string | null | undefined) {
   if (v === "suboficial") return "SubOficial";
   if (v === "enlistado") return "Enlistado";
   return "";
-}
-
-function resolveRankImage(rankName: string | null | undefined) {
-  const rawName = String(rankName ?? "").trim();
-  if (!rawName) {
-    return "/img/Rangos/Recluta.png";
-  }
-
-  const direct = (rankInsignia as unknown as Record<string, string>)[rawName];
-  if (direct) return direct;
-
-  const key = normalizeKey(rawName);
-  return (
-    rankInsigniaByNormalizedName[key] ??
-    rankImageByKey[key] ??
-    "/img/Rangos/Recluta.png"
-  );
 }
 
 function resolveCourseLogo(courseCode: string) {
@@ -229,6 +207,7 @@ export default async function DashboardPage() {
   }
 
   const rankName = data.user?.rank?.name ?? "";
+  const divisionRaw = data.user?.division ?? null;
   const backgroundSrc = cloudinaryImageUrl(data.user?.backgroundPublicId, {
     w: 1920,
     h: 1080,
@@ -243,7 +222,7 @@ export default async function DashboardPage() {
       member={{
         nombre: displayName,
         rango: rankName || "Sin rango",
-        rangoImg: resolveRankImage(rankName),
+        rangoImg: resolveRankImage(rankName, divisionRaw),
         division: prettyDivision(data.user?.division),
         categoria: prettyCategory(data.user?.category),
         cursosAprobados: approvedCourses.map((c) => c.code).filter(Boolean),

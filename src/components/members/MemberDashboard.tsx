@@ -190,8 +190,15 @@ export function MemberDashboard(props: {
     if (!response.ok) {
       let message = "CLOUDINARY_UPLOAD_FAILED";
       try {
-        const json = (await response.json()) as any;
-        const m = String(json?.error?.message ?? "").trim();
+        const json: unknown = await response.json();
+        const isRecord = (v: unknown): v is Record<string, unknown> =>
+          Boolean(v) && typeof v === "object";
+
+        const error = isRecord(json) ? json.error : undefined;
+        const m =
+          isRecord(error) && typeof error.message === "string"
+            ? error.message.trim()
+            : "";
         if (m) message = m;
       } catch {
         const text = await response.text().catch(() => "");
@@ -210,8 +217,11 @@ export function MemberDashboard(props: {
       throw new Error(message);
     }
 
-    const json = (await response.json()) as { public_id?: string };
-    const publicId = String(json?.public_id ?? "").trim();
+    const json: unknown = await response.json();
+    const publicId =
+      json && typeof json === "object" && "public_id" in json
+        ? String((json as { public_id?: unknown }).public_id ?? "").trim()
+        : "";
     if (!publicId) throw new Error("CLOUDINARY_NO_PUBLIC_ID");
     return publicId;
   }

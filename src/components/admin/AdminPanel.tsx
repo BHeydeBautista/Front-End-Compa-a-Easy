@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Reveal } from "@/components/ui/Reveal";
 import { Progress } from "@/components/ui/progress";
 import { motion } from "motion/react";
-import { rankInsignia } from "@/components/members/company-members-hierarchy/data";
+import { resolveRankImage } from "@/lib/rank-images";
 import { Ban, CheckCircle2, Crown, Pencil, RotateCcw, Shield, User as UserIcon } from "lucide-react";
 
 type UserRole = "super_admin" | "moderator" | "infraestructura" | "formacion" | "user";
@@ -253,20 +253,7 @@ const normalizeKey = (value: string) =>
     .replace(/[^a-z0-9]/gi, "")
     .toUpperCase();
 
-const rankInsigniaByNormalizedName: Record<string, string> = Object.fromEntries(
-  Object.entries(rankInsignia as unknown as Record<string, string>).map(([name, src]) => [normalizeKey(name), src]),
-);
-
-function resolveRankImage(rankName: string) {
-  const rawName = String(rankName ?? "").trim();
-  if (!rawName) return "/img/Rangos/Recluta.png";
-
-  const direct = (rankInsignia as unknown as Record<string, string>)[rawName];
-  if (direct) return direct;
-
-  const key = normalizeKey(rawName);
-  return rankInsigniaByNormalizedName[key] ?? "/img/Rangos/Recluta.png";
-}
+// Rank images are resolved via shared helper to match the canonical mapping in "Sobre nosotros".
 
 function guessRankCategory(rankName: string): string {
   const key = normalizeKey(rankName);
@@ -318,7 +305,7 @@ function guessRankCategory(rankName: string): string {
 }
 
 function RankInsigniaCell({ rankName }: { rankName: string }) {
-  const src = resolveRankImage(rankName);
+  const src = resolveRankImage(rankName, null);
 
   return (
     <div className="flex items-center justify-center">
@@ -1593,7 +1580,7 @@ export function AdminPanel({
                             const selected = u.id === selectedUserId;
                             const division = String(u.division ?? "");
                             const rankName = u.rank?.name ?? "";
-                            const avatarSrc = rankName ? resolveRankImage(rankName) : "";
+                            const avatarSrc = rankName ? resolveRankImage(rankName, division) : "";
                             const isActive = !u.deletedAt;
                             const canToggleRole = u.role === "user" || u.role === "moderator";
 
@@ -2340,7 +2327,7 @@ export function AdminPanel({
                 </div>
 
                 <div className="mt-5 grid grid-cols-1 gap-4">
-                  <ControlBase className="overflow-hidden">
+                  <ControlBase className="overflow-x-auto overflow-y-hidden">
                     <div className="bg-foreground/5 px-5 py-4">
                       <p className="text-base font-semibold text-foreground">Rangos — Vista</p>
                       <p className="mt-2 text-sm leading-6 text-foreground/60">
@@ -2348,7 +2335,7 @@ export function AdminPanel({
                       </p>
                     </div>
 
-                    <table className="w-full text-left text-sm">
+                    <table className="w-full min-w-[520px] text-left text-sm">
                       <thead className="bg-background">
                         <tr className="text-foreground/70">
                           <th className="px-4 py-3 text-xs font-semibold">Insignia</th>

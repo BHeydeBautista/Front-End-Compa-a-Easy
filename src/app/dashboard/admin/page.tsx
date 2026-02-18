@@ -15,7 +15,12 @@ export default async function AdminDashboardPage() {
   }
   if (!session) redirect("/api/auth/logout");
 
-  const role = String((session as any).user?.role ?? "").toLowerCase();
+  const sessionLike = session as unknown as {
+    user?: { role?: unknown };
+    accessToken?: unknown;
+  };
+
+  const role = String(sessionLike.user?.role ?? "").toLowerCase();
   if (role !== "super_admin") {
     redirect("/dashboard");
   }
@@ -25,7 +30,8 @@ export default async function AdminDashboardPage() {
     (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : "")
   ).replace(/\/+$/, "");
 
-  const accessToken = (session as any).accessToken as string | undefined;
+  const accessToken =
+    typeof sessionLike.accessToken === "string" ? sessionLike.accessToken : undefined;
 
   if (!backendBaseUrl || !accessToken) {
     redirect("/api/auth/logout");

@@ -84,36 +84,38 @@ function RankCard({
           </p>
         </div>
       ) : (
-        <table className="w-full text-left text-sm">
-          <thead className="bg-background">
-            <tr className="text-foreground/70">
-              <th className="px-4 py-3 text-xs font-semibold">Insignia</th>
-              <th className="px-4 py-3 text-xs font-semibold">Categoría</th>
-              <th className="px-4 py-3 text-xs font-semibold">Rango</th>
-              <th className="px-4 py-3 text-xs font-semibold">Nivel</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-foreground/10">
-            {rows.map((row) => (
-              <tr
-                key={`${row.cat}-${row.r}`}
-                className={cn(
-                  "bg-background",
-                  reducedMotion ? "" : "transition-colors hover:bg-foreground/5"
-                )}
-              >
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-center">
-                    <RankInsignia src={row.imgSrc} alt={`Insignia ${row.r}`} />
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-foreground/70">{row.cat}</td>
-                <td className="px-4 py-3 font-semibold text-foreground">{row.r}</td>
-                <td className="px-4 py-3 text-foreground/70">Nivel {row.n}</td>
+        <div className="overflow-x-auto overflow-y-hidden bg-background">
+          <table className="w-full min-w-[520px] text-left text-sm">
+            <thead className="bg-background">
+              <tr className="text-foreground/70">
+                <th className="px-4 py-3 text-xs font-semibold">Insignia</th>
+                <th className="px-4 py-3 text-xs font-semibold">Categoría</th>
+                <th className="px-4 py-3 text-xs font-semibold">Rango</th>
+                <th className="px-4 py-3 text-xs font-semibold">Nivel</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-foreground/10">
+              {rows.map((row) => (
+                <tr
+                  key={`${row.cat}-${row.r}`}
+                  className={cn(
+                    "bg-background",
+                    reducedMotion ? "" : "transition-colors hover:bg-foreground/5"
+                  )}
+                >
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-center">
+                      <RankInsignia src={row.imgSrc} alt={`Insignia ${row.r}`} />
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-foreground/70">{row.cat}</td>
+                  <td className="px-4 py-3 font-semibold text-foreground">{row.r}</td>
+                  <td className="px-4 py-3 text-foreground/70">Nivel {row.n}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </motion.div>
   );

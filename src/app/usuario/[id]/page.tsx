@@ -2,9 +2,9 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
-import { rankInsignia } from "@/components/members/company-members-hierarchy/data";
 import { MemberDashboard, type MemberDashboardCourseCatalog } from "@/components/members/MemberDashboard";
 import { cloudinaryImageUrl } from "@/lib/cloudinary";
+import { resolveRankImage } from "@/lib/rank-images";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -35,18 +35,6 @@ function prettyCategory(value: string | null | undefined) {
   if (v === "suboficial") return "SubOficial";
   if (v === "enlistado") return "Enlistado";
   return "";
-}
-
-function resolveRankImage(rankName: string | null | undefined) {
-  const rawName = String(rankName ?? "").trim();
-  if (!rawName) {
-    return "/img/Rangos/Recluta.png";
-  }
-
-  const direct = (rankInsignia as unknown as Record<string, string>)[rawName];
-  if (direct) return direct;
-
-  return "/img/Rangos/Recluta.png";
 }
 
 export default async function UsuarioPerfilPublicoPage({
@@ -103,6 +91,7 @@ export default async function UsuarioPerfilPublicoPage({
   }
 
   const rankName = data.rank?.name ?? "";
+  const divisionRaw = data.division ?? null;
   const backgroundSrc = cloudinaryImageUrl(data.backgroundPublicId, {
     w: 1920,
     h: 1080,
@@ -115,7 +104,7 @@ export default async function UsuarioPerfilPublicoPage({
       member={{
         nombre: data.name ?? "Usuario",
         rango: rankName || "Sin rango",
-        rangoImg: resolveRankImage(rankName),
+        rangoImg: resolveRankImage(rankName, divisionRaw),
         division: prettyDivision(data.division),
         categoria: prettyCategory(data.category),
         cursosAprobados: approved.map((c) => c.code).filter(Boolean),

@@ -87,12 +87,12 @@ export function HeroCarousel() {
                 aria-hidden="true"
               />
               {reducedMotion ? (
-                <h1 className="text-5xl font-extrabold tracking-tight text-foreground sm:text-7xl">
+                <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-6xl lg:text-7xl">
                   Compañía Easy
                 </h1>
               ) : (
                 <FancyText
-                  className="whitespace-nowrap text-5xl font-extrabold leading-none tracking-tight text-foreground/10 sm:text-7xl"
+                  className="whitespace-normal sm:whitespace-nowrap text-4xl font-extrabold leading-none tracking-tight text-foreground/10 sm:text-6xl lg:text-7xl"
                   fillClassName="text-foreground"
                   stagger={0.06}
                   duration={1.1}

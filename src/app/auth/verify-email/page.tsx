@@ -35,8 +35,15 @@ export default async function VerifyEmailPage(props: {
         const raw = await res.text();
         status = "error";
         try {
-          const parsed = raw ? (JSON.parse(raw) as any) : null;
-          message = String(parsed?.message ?? parsed?.error ?? "No se pudo verificar el correo.");
+          const parsed: unknown = raw ? JSON.parse(raw) : null;
+          if (parsed && typeof parsed === "object") {
+            const record = parsed as Record<string, unknown>;
+            message = String(
+              record.message ?? record.error ?? "No se pudo verificar el correo.",
+            );
+          } else {
+            message = "No se pudo verificar el correo.";
+          }
         } catch {
           message = raw || "No se pudo verificar el correo.";
         }

@@ -18,6 +18,9 @@ type User = {
   role: UserRole;
   rankId?: number | null;
   rank?: { id: number; name: string } | null;
+  division?: string | null;
+  missionAttendanceCount?: number;
+  trainingAttendanceCount?: number;
   deletedAt?: string | null;
 };
 
@@ -38,6 +41,38 @@ type ApprovedCourseRow = {
   id: number;
   approvedAt: string;
   course: Course;
+};
+
+type RankUnlockRow = {
+  id: number;
+  createdAt: string;
+  note?: string | null;
+  course: Course;
+};
+
+type AttendanceType = "mission" | "training";
+
+type AttendanceSessionSummary = {
+  id: number;
+  date: string;
+  type: AttendanceType;
+  presentCount: number;
+};
+
+type AttendanceSessionUsers = {
+  session: {
+    id: number;
+    date: string;
+    type: AttendanceType;
+  };
+  presentCount: number;
+  users: Array<{
+    id: number;
+    name: string;
+    email: string;
+    deletedAt?: string | null;
+    present: boolean;
+  }>;
 };
 
 type AuditEvent = {
@@ -281,7 +316,7 @@ function RankInsigniaCell({ rankName }: { rankName: string }) {
   );
 }
 
-type AdminSection = "users" | "courses" | "divisions" | "ranks" | "audit" | "settings";
+type AdminSection = "users" | "courses" | "divisions" | "ranks" | "attendance" | "audit" | "settings";
 
 function initials(name: string) {
   const parts = String(name ?? "")
@@ -397,6 +432,8 @@ export function AdminPanel({
   backendBaseUrl: string;
   accessToken?: string;
 }) {
+  const USERS_PAGE_SIZE = 10;
+
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -429,6 +466,9 @@ export function AdminPanel({
   const [roleDraft, setRoleDraft] = React.useState<UserRole | "">("");
   const [rankIdDraft, setRankIdDraft] = React.useState<number | "" | null>("");
 
+  const [missionAttendanceDraft, setMissionAttendanceDraft] = React.useState<string>("0");
+  const [trainingAttendanceDraft, setTrainingAttendanceDraft] = React.useState<string>("0");
+
   const [approvedRows, setApprovedRows] = React.useState<ApprovedCourseRow[]>([]);
   const approvedCourseIds = React.useMemo(() => {
     return new Set(
@@ -444,6 +484,8 @@ export function AdminPanel({
   const [userRoleFilter, setUserRoleFilter] = React.useState<UserRole | "all">("all");
   const [userStatusFilter, setUserStatusFilter] = React.useState<"all" | "active" | "inactive">("all");
   const [userDivisionFilter, setUserDivisionFilter] = React.useState<string | "all">("all");
+
+  const [userPage, setUserPage] = React.useState(1);
 
   const [adminBackground, setAdminBackground] = React.useState<string>(adminBackgroundOptions[0]?.value ?? "20260205002446_1.jpg");
   const [auditEvents, setAuditEvents] = React.useState<AuditEvent[]>([]);
@@ -461,6 +503,16 @@ export function AdminPanel({
   const [rankNew, setRankNew] = React.useState<{ name: string; sortOrder: string }>(
     { name: "", sortOrder: "0" },
   );
+
+  const [rankUnlocks, setRankUnlocks] = React.useState<RankUnlockRow[]>([]);
+  const [rankUnlockCourseId, setRankUnlockCourseId] = React.useState<number | "">("");
+
+  const [attendanceSessions, setAttendanceSessions] = React.useState<AttendanceSessionSummary[]>([]);
+  const [attendanceSelectedSessionId, setAttendanceSelectedSessionId] = React.useState<number | null>(null);
+  const [attendanceSessionUsers, setAttendanceSessionUsers] = React.useState<AttendanceSessionUsers | null>(null);
+  const [attendanceNewDate, setAttendanceNewDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
+  const [attendanceNewType, setAttendanceNewType] = React.useState<AttendanceType>("mission");
+  const [attendanceIncludeInactive, setAttendanceIncludeInactive] = React.useState(false);
 
   const loadBase = React.useCallback(async () => {
     if (!accessToken) return;
@@ -523,6 +575,8 @@ export function AdminPanel({
       setRoleDraft("");
       setRankIdDraft("");
       setCourseToToggleId("");
+      setMissionAttendanceDraft("0");
+      setTrainingAttendanceDraft("0");
       return;
     }
     setRoleDraft(selectedUser.role ?? "user");
@@ -530,6 +584,8 @@ export function AdminPanel({
       typeof selectedUser.rankId === "number" ? selectedUser.rankId : null,
     );
     setCourseToToggleId("");
+    setMissionAttendanceDraft(String(selectedUser.missionAttendanceCount ?? 0));
+    setTrainingAttendanceDraft(String(selectedUser.trainingAttendanceCount ?? 0));
   }, [selectedUser]);
 
   React.useEffect(() => {
@@ -547,13 +603,93 @@ export function AdminPanel({
   React.useEffect(() => {
     if (!selectedRank) {
       setRankEdit({ name: "", sortOrder: "0" });
+      setRankUnlocks([]);
+      setRankUnlockCourseId("");
       return;
     }
     setRankEdit({
       name: selectedRank.name ?? "",
       sortOrder: String(selectedRank.sortOrder ?? 0),
     });
+    setRankUnlockCourseId("");
   }, [selectedRank]);
+
+  const loadRankUnlocks = React.useCallback(async () => {
+    if (!accessToken || !selectedRankId) {
+      setRankUnlocks([]);
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      const rows = await apiFetch<RankUnlockRow[]>(
+        `${backendBaseUrl}/ranks/${selectedRankId}/unlocks`,
+        { accessToken },
+      );
+      setRankUnlocks(rows);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [accessToken, backendBaseUrl, selectedRankId]);
+
+  React.useEffect(() => {
+    loadRankUnlocks();
+  }, [loadRankUnlocks]);
+
+  const loadAttendanceSessions = React.useCallback(async () => {
+    if (!accessToken) {
+      setAttendanceSessions([]);
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      const rows = await apiFetch<AttendanceSessionSummary[]>(
+        `${backendBaseUrl}/attendance/sessions`,
+        { accessToken },
+      );
+      setAttendanceSessions(rows);
+
+      if (!attendanceSelectedSessionId && rows.length) {
+        setAttendanceSelectedSessionId(rows[0].id);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [accessToken, backendBaseUrl, attendanceSelectedSessionId]);
+
+  const loadAttendanceUsers = React.useCallback(async () => {
+    if (!accessToken || !attendanceSelectedSessionId) {
+      setAttendanceSessionUsers(null);
+      return;
+    }
+
+    setError(null);
+    setBusy(true);
+    try {
+      const data = await apiFetch<AttendanceSessionUsers>(
+        `${backendBaseUrl}/attendance/sessions/${attendanceSelectedSessionId}/users?includeDeleted=${attendanceIncludeInactive ? "true" : "false"}`,
+        { accessToken },
+      );
+      setAttendanceSessionUsers(data);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [accessToken, backendBaseUrl, attendanceIncludeInactive, attendanceSelectedSessionId]);
+
+  React.useEffect(() => {
+    loadAttendanceSessions();
+  }, [loadAttendanceSessions]);
+
+  React.useEffect(() => {
+    loadAttendanceUsers();
+  }, [loadAttendanceUsers]);
 
   React.useEffect(() => {
     loadApproved();
@@ -562,7 +698,7 @@ export function AdminPanel({
   const divisionOptions = React.useMemo(() => {
     const set = new Set<string>();
     for (const u of users) {
-      const v = String((u as any).division ?? "").trim();
+      const v = String(u.division ?? "").trim();
       if (v) set.add(v);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
@@ -577,7 +713,7 @@ export function AdminPanel({
         if (userStatusFilter === "active" && u.deletedAt) return false;
         if (userStatusFilter === "inactive" && !u.deletedAt) return false;
 
-        const div = String((u as any).division ?? "");
+        const div = String(u.division ?? "");
         if (userDivisionFilter !== "all" && div !== userDivisionFilter) return false;
 
         if (!q) return true;
@@ -590,10 +726,28 @@ export function AdminPanel({
       .sort((a, b) => a.id - b.id);
   }, [users, userDivisionFilter, userRoleFilter, userSearch, userStatusFilter]);
 
+  React.useEffect(() => {
+    setUserPage(1);
+  }, [userSearch, userRoleFilter, userStatusFilter, userDivisionFilter]);
+
+  const userPageCount = React.useMemo(
+    () => Math.max(1, Math.ceil(filteredUsers.length / USERS_PAGE_SIZE)),
+    [filteredUsers.length],
+  );
+
+  React.useEffect(() => {
+    setUserPage((p) => Math.min(Math.max(1, p), userPageCount));
+  }, [userPageCount]);
+
+  const pagedUsers = React.useMemo(() => {
+    const start = (userPage - 1) * USERS_PAGE_SIZE;
+    return filteredUsers.slice(start, start + USERS_PAGE_SIZE);
+  }, [filteredUsers, userPage]);
+
   const stats = React.useMemo(() => {
     const divisions = new Set<string>();
     for (const u of users) {
-      const v = String((u as any).division ?? "").trim();
+      const v = String(u.division ?? "").trim();
       if (v) divisions.add(v);
     }
     return {
@@ -603,6 +757,19 @@ export function AdminPanel({
       ranks: ranks.length,
     };
   }, [courses.length, ranks.length, users]);
+
+  const divisionSummary = React.useMemo(() => {
+    const byDivision = new Map<string, { division: string; total: number; active: number; inactive: number }>();
+    for (const u of users) {
+      const division = String(u.division ?? "").trim() || "(Sin división)";
+      const row = byDivision.get(division) ?? { division, total: 0, active: 0, inactive: 0 };
+      row.total += 1;
+      if (u.deletedAt) row.inactive += 1;
+      else row.active += 1;
+      byDivision.set(division, row);
+    }
+    return Array.from(byDivision.values()).sort((a, b) => a.division.localeCompare(b.division));
+  }, [users]);
 
   const logAudit = React.useCallback((action: string, detail?: string) => {
     setAuditEvents((prev) => {
@@ -764,6 +931,127 @@ export function AdminPanel({
     }
   };
 
+  const onSaveAttendance = async () => {
+    if (!selectedUserId || !selectedUser) return;
+
+    const mission = Math.max(0, Number(missionAttendanceDraft || 0));
+    const training = Math.max(0, Number(trainingAttendanceDraft || 0));
+
+    if (!Number.isFinite(mission) || !Number.isFinite(training)) return;
+
+    const currentMission = Number(selectedUser.missionAttendanceCount ?? 0);
+    const currentTraining = Number(selectedUser.trainingAttendanceCount ?? 0);
+    if (mission === currentMission && training === currentTraining) return;
+
+    setError(null);
+    setBusy(true);
+    try {
+      const updated = await apiFetch<User>(`${backendBaseUrl}/users/${selectedUserId}`, {
+        accessToken,
+        method: "PATCH",
+        body: {
+          missionAttendanceCount: mission,
+          trainingAttendanceCount: training,
+        },
+      });
+
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)));
+      logAudit("Actualizar asistencias", `Usuario ID ${selectedUserId} → misión ${mission}, entreno ${training}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onAddRankUnlock = async () => {
+    if (!selectedRankId) return;
+    if (rankUnlockCourseId === "") return;
+
+    setError(null);
+    setBusy(true);
+    try {
+      await apiFetch<RankUnlockRow>(`${backendBaseUrl}/ranks/${selectedRankId}/unlocks`, {
+        accessToken: accessToken!,
+        method: "POST",
+        body: { courseId: Number(rankUnlockCourseId) },
+      });
+      await loadRankUnlocks();
+      setRankUnlockCourseId("");
+      logAudit("Agregar desbloqueo", `Rango ID ${selectedRankId} — Curso ID ${String(rankUnlockCourseId)}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onRemoveRankUnlock = async (courseId: number) => {
+    if (!selectedRankId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await apiFetch<{ ok: true }>(`${backendBaseUrl}/ranks/${selectedRankId}/unlocks/${courseId}`, {
+        accessToken: accessToken!,
+        method: "DELETE",
+      });
+      await loadRankUnlocks();
+      logAudit("Quitar desbloqueo", `Rango ID ${selectedRankId} — Curso ID ${courseId}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onCreateAttendanceSession = async () => {
+    if (!attendanceNewDate) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const created = await apiFetch<{ id: number; date: string; type: AttendanceType }>(
+        `${backendBaseUrl}/attendance/sessions`,
+        {
+          accessToken: accessToken!,
+          method: "POST",
+          body: { date: attendanceNewDate, type: attendanceNewType },
+        },
+      );
+      await loadAttendanceSessions();
+      setAttendanceSelectedSessionId(created.id);
+      logAudit("Crear asistencia", `${created.type} — ${created.date}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onToggleAttendance = async (userId: number, present: boolean) => {
+    if (!attendanceSelectedSessionId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      if (present) {
+        await apiFetch<{ ok: true }>(
+          `${backendBaseUrl}/attendance/sessions/${attendanceSelectedSessionId}/confirm/${userId}`,
+          { accessToken: accessToken!, method: "DELETE" },
+        );
+      } else {
+        await apiFetch<{ id: number }>(
+          `${backendBaseUrl}/attendance/sessions/${attendanceSelectedSessionId}/confirm`,
+          { accessToken: accessToken!, method: "POST", body: { userId } },
+        );
+      }
+
+      await loadAttendanceUsers();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onCreateCourse = async () => {
     const code = courseNew.code.trim();
     const name = courseNew.name.trim();
@@ -914,19 +1202,6 @@ export function AdminPanel({
     );
   };
 
-  const divisionSummary = React.useMemo(() => {
-    const byDivision = new Map<string, { division: string; total: number; active: number; inactive: number }>();
-    for (const u of users) {
-      const division = String((u as any).division ?? "").trim() || "(Sin división)";
-      const row = byDivision.get(division) ?? { division, total: 0, active: 0, inactive: 0 };
-      row.total += 1;
-      if (u.deletedAt) row.inactive += 1;
-      else row.active += 1;
-      byDivision.set(division, row);
-    }
-    return Array.from(byDivision.values()).sort((a, b) => a.division.localeCompare(b.division));
-  }, [users]);
-
   return (
     <div className="relative overflow-hidden">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
@@ -960,6 +1235,7 @@ export function AdminPanel({
               {sideItem("courses", "Cursos")}
               {sideItem("divisions", "Divisiones")}
               {sideItem("ranks", "Rangos")}
+              {sideItem("attendance", "Asistencias")}
               {sideItem("audit", "Auditoría")}
               {sideItem("settings", "Ajustes")}
             </div>
@@ -987,6 +1263,7 @@ export function AdminPanel({
                     {topTab("courses", "Cursos")}
                     {topTab("divisions", "Divisiones")}
                     {topTab("ranks", "Rangos")}
+                    {topTab("attendance", "Asistencias")}
                   </div>
                 </div>
 
@@ -1018,7 +1295,7 @@ export function AdminPanel({
 
                   <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
                     <div className="lg:col-span-3">
-                      <Select value={userRoleFilter} onChange={(e) => setUserRoleFilter(e.target.value as any)} disabled={busy}>
+                      <Select value={userRoleFilter} onChange={(e) => setUserRoleFilter(e.target.value as UserRole | "all")} disabled={busy}>
                         <option value="all">Todos los roles</option>
                         <option value="user">user</option>
                         <option value="moderator">moderator</option>
@@ -1036,7 +1313,7 @@ export function AdminPanel({
                       </Select>
                     </div>
                     <div className="lg:col-span-3">
-                      <Select value={userStatusFilter} onChange={(e) => setUserStatusFilter(e.target.value as any)} disabled={busy}>
+                      <Select value={userStatusFilter} onChange={(e) => setUserStatusFilter(e.target.value as "all" | "active" | "inactive")} disabled={busy}>
                         <option value="all">Todos los estados</option>
                         <option value="active">Activos</option>
                         <option value="inactive">Inactivos</option>
@@ -1048,80 +1325,63 @@ export function AdminPanel({
                   </div>
 
                   <div className="overflow-hidden rounded-2xl border border-foreground/10">
-                    <div className="max-h-[520px] overflow-auto bg-background">
-                      <table className="w-full text-left text-sm">
-                        <thead className="sticky top-0 bg-background">
-                          <tr className="text-foreground/70">
-                            <th className="px-4 py-3 text-xs font-semibold">#</th>
-                            <th className="px-4 py-3 text-xs font-semibold">Usuario</th>
-                            <th className="px-4 py-3 text-xs font-semibold">Rango</th>
-                            <th className="px-4 py-3 text-xs font-semibold">División</th>
-                            <th className="px-4 py-3 text-xs font-semibold">Rol</th>
-                            <th className="px-4 py-3 text-xs font-semibold">Estado</th>
-                            <th className="px-4 py-3 text-xs font-semibold">Acciones</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-foreground/10">
-                          {filteredUsers.map((u, idx) => {
+                    <div className="bg-background">
+                      <div className="grid grid-cols-1 divide-y divide-foreground/10">
+                        {pagedUsers.length ? (
+                          pagedUsers.map((u, idx) => {
                             const selected = u.id === selectedUserId;
-                            const division = String((u as any).division ?? "");
+                            const division = String(u.division ?? "");
                             const rankName = u.rank?.name ?? "";
                             const avatarSrc = rankName ? resolveRankImage(rankName) : "";
                             const isActive = !u.deletedAt;
                             const canToggleRole = u.role !== "super_admin";
+
                             return (
-                              <tr
+                              <div
                                 key={u.id}
                                 className={cn(
-                                  "bg-background transition-colors",
-                                  selected ? "bg-emerald-500/10" : "hover:bg-foreground/5",
+                                  "px-4 py-3 transition-colors",
+                                  selected ? "bg-emerald-500/10" : "bg-background hover:bg-foreground/5",
                                 )}
                               >
-                                <td className="px-4 py-3 align-top">
-                                  <span className={cn("text-xs font-semibold", selected ? "text-emerald-200" : "text-foreground/60")}>
-                                    #{idx + 1}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedUserId(u.id)}
-                                    className="flex w-full items-center gap-3 text-left"
-                                    disabled={busy}
-                                  >
-                                    <div
-                                      className={cn(
-                                        "relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border",
-                                        selected ? "border-emerald-400/40 bg-emerald-500/10" : "border-foreground/10 bg-foreground/5",
-                                      )}
-                                      aria-hidden="true"
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex min-w-0 items-start gap-3">
+                                    <p className={cn("pt-1 text-xs font-semibold", selected ? "text-emerald-200" : "text-foreground/60")}>
+                                      #{(userPage - 1) * USERS_PAGE_SIZE + idx + 1}
+                                    </p>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedUserId(u.id)}
+                                      className="flex min-w-0 items-center gap-3 text-left"
+                                      disabled={busy}
                                     >
-                                      {avatarSrc ? (
-                                        <Image src={avatarSrc} alt="" fill sizes="40px" className="object-contain p-1" />
-                                      ) : (
-                                        <span className="text-xs font-semibold text-foreground/80">{initials(u.name)}</span>
-                                      )}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <p className="truncate text-sm font-semibold text-foreground">{u.name}</p>
-                                      <p className="truncate text-xs text-foreground/60">
-                                        ID {u.id} — {u.email}
-                                      </p>
-                                    </div>
-                                  </button>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <Pill>{u.rank?.name ?? "(sin rango)"}</Pill>
-                                </td>
-                                <td className="px-4 py-3 text-foreground/70">{division || "—"}</td>
-                                <td className="px-4 py-3">
-                                  <RoleBadge role={u.role} />
-                                </td>
-                                <td className="px-4 py-3">
-                                  <StatusBadge active={isActive} />
-                                </td>
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center gap-2">
+                                      <div
+                                        className={cn(
+                                          "relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border",
+                                          selected ? "border-emerald-400/40 bg-emerald-500/10" : "border-foreground/10 bg-foreground/5",
+                                        )}
+                                        aria-hidden="true"
+                                      >
+                                        {avatarSrc ? (
+                                          <Image src={avatarSrc} alt="" fill sizes="48px" className="object-contain" />
+                                        ) : (
+                                          <span className="text-xs font-semibold text-foreground/80">{initials(u.name)}</span>
+                                        )}
+                                      </div>
+
+                                      <div className="min-w-0">
+                                        <p title={u.name} className="truncate text-sm font-semibold text-foreground">
+                                          {u.name}
+                                        </p>
+                                        <p title={`ID ${u.id} — ${u.email}`} className="truncate text-xs text-foreground/60">
+                                          ID {u.id} — {u.email}
+                                        </p>
+                                      </div>
+                                    </button>
+                                  </div>
+
+                                  <div className="flex shrink-0 items-center gap-2">
                                     <IconButton
                                       type="button"
                                       onClick={() => setSelectedUserId(u.id)}
@@ -1167,12 +1427,54 @@ export function AdminPanel({
                                       </IconButton>
                                     )}
                                   </div>
-                                </td>
-                              </tr>
+                                </div>
+
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                  <Pill>{u.rank?.name ?? "(sin rango)"}</Pill>
+                                  <Pill className="text-foreground/80">{division || "—"}</Pill>
+                                  <RoleBadge role={u.role} />
+                                  <StatusBadge active={isActive} />
+                                </div>
+                              </div>
                             );
-                          })}
-                        </tbody>
-                      </table>
+                          })
+                        ) : (
+                          <div className="px-4 py-8 text-center text-sm text-foreground/70">No hay usuarios para mostrar.</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-foreground/60">
+                      {filteredUsers.length ? (
+                        <>
+                          Mostrando {(userPage - 1) * USERS_PAGE_SIZE + 1}–{Math.min(userPage * USERS_PAGE_SIZE, filteredUsers.length)} de {filteredUsers.length}
+                        </>
+                      ) : (
+                        <>Mostrando 0 de 0</>
+                      )}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="subtle"
+                        onClick={() => setUserPage((p) => Math.max(1, p - 1))}
+                        disabled={userPage <= 1}
+                      >
+                        Anterior
+                      </Button>
+                      <p className="text-xs text-foreground/60">
+                        Página {userPage} de {userPageCount}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="subtle"
+                        onClick={() => setUserPage((p) => Math.min(userPageCount, p + 1))}
+                        disabled={userPage >= userPageCount}
+                      >
+                        Siguiente
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -1314,10 +1616,174 @@ export function AdminPanel({
                         )}
                       </div>
                     </ControlBase>
+
+                    <ControlBase className="p-4">
+                      <p className="text-sm font-medium text-foreground">Asistencias</p>
+                      <p className="mt-1 text-xs text-foreground/70">Sumar asistencias en misión y entrenamientos.</p>
+
+                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div className="space-y-2">
+                          <FieldLabel>Misión</FieldLabel>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={missionAttendanceDraft}
+                            onChange={(e) => setMissionAttendanceDraft(e.target.value)}
+                            disabled={busy}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <FieldLabel>Entrenamiento</FieldLabel>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={trainingAttendanceDraft}
+                            onChange={(e) => setTrainingAttendanceDraft(e.target.value)}
+                            disabled={busy}
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button type="button" onClick={onSaveAttendance} disabled={busy} className="w-full">
+                            Guardar
+                          </Button>
+                        </div>
+                      </div>
+                    </ControlBase>
                   </div>
                 ) : (
                   <p className="mt-5 text-sm text-foreground/70">Seleccioná un usuario para habilitar edición.</p>
                 )}
+              </Card>
+            </div>
+          ) : null}
+
+          {activeSection === "attendance" ? (
+            <div className="mt-6">
+              <Card delay={0.08}>
+                <div>
+                  <h2 className="text-lg font-semibold tracking-tight text-foreground">Asistencias</h2>
+                  <p className="mt-1 text-sm text-foreground/70">Sesiones por fecha (misión o entrenamiento) y confirmación por miembro.</p>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-4">
+                  <ControlBase className="p-4">
+                    <p className="text-sm font-medium text-foreground">Crear sesión</p>
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div className="space-y-2">
+                        <FieldLabel>Fecha</FieldLabel>
+                        <Input type="date" value={attendanceNewDate} onChange={(e) => setAttendanceNewDate(e.target.value)} disabled={busy} />
+                      </div>
+                      <div className="space-y-2">
+                        <FieldLabel>Tipo</FieldLabel>
+                        <Select value={attendanceNewType} onChange={(e) => setAttendanceNewType(e.target.value as AttendanceType)} disabled={busy}>
+                          <option value="mission">Misión</option>
+                          <option value="training">Entrenamiento</option>
+                        </Select>
+                      </div>
+                      <div className="flex items-end">
+                        <Button type="button" onClick={onCreateAttendanceSession} disabled={busy || !attendanceNewDate} className="w-full">
+                          Crear
+                        </Button>
+                      </div>
+                    </div>
+                  </ControlBase>
+
+                  <ControlBase className="p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Sesiones</p>
+                        <p className="mt-1 text-xs text-foreground/70">Seleccioná una fecha para confirmar asistencias.</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 text-xs text-foreground/70">
+                          <input
+                            type="checkbox"
+                            checked={attendanceIncludeInactive}
+                            onChange={(e) => setAttendanceIncludeInactive(e.target.checked)}
+                            disabled={busy}
+                          />
+                          Incluir inactivos
+                        </label>
+                        <Button type="button" variant="subtle" onClick={loadAttendanceSessions} disabled={busy}>
+                          Recargar
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <FieldLabel>Sesión</FieldLabel>
+                        <Select
+                          value={attendanceSelectedSessionId ?? ""}
+                          onChange={(e) => setAttendanceSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
+                          disabled={busy || !attendanceSessions.length}
+                        >
+                          <option value="" disabled>
+                            Seleccionar…
+                          </option>
+                          {attendanceSessions.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.date} — {s.type === "mission" ? "Misión" : "Entrenamiento"} ({s.presentCount})
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <FieldLabel>Resumen</FieldLabel>
+                        <div className="rounded-xl border border-foreground/10 bg-background/20 px-3 py-2 text-sm text-foreground/80">
+                          {attendanceSessionUsers ? (
+                            <>
+                              Asistieron <span className="font-semibold">{attendanceSessionUsers.presentCount}</span> de {attendanceSessionUsers.users.length}
+                            </>
+                          ) : (
+                            <>Seleccioná una sesión</>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-5">
+                      {attendanceSessionUsers ? (
+                        <div className="grid grid-cols-1 divide-y divide-foreground/10 overflow-hidden rounded-2xl border border-foreground/10">
+                          {attendanceSessionUsers.users.map((u) => (
+                            <div key={u.id} className="bg-background px-4 py-3">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {u.name}{u.deletedAt ? " (inactivo)" : ""}
+                                  </p>
+                                  <p className="text-xs text-foreground/60">
+                                    ID {u.id} — {u.email}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {u.present ? (
+                                    <Pill className="border-emerald-400/30 bg-emerald-500/10 text-emerald-200">Confirmado</Pill>
+                                  ) : (
+                                    <Pill className="border-foreground/10 bg-background/30 text-foreground/70">Sin confirmar</Pill>
+                                  )}
+                                  <Button
+                                    type="button"
+                                    variant={u.present ? "subtle" : "default"}
+                                    onClick={() => onToggleAttendance(u.id, u.present)}
+                                    disabled={busy}
+                                    className="px-3 py-2 text-xs"
+                                  >
+                                    {u.present ? "Quitar" : "Confirmar"}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-foreground/70">No hay sesión seleccionada.</p>
+                      )}
+                    </div>
+                  </ControlBase>
+                </div>
               </Card>
             </div>
           ) : null}
@@ -1477,6 +1943,76 @@ export function AdminPanel({
                       <Button type="button" onClick={onUpdateRank} disabled={busy || !selectedRankId || !rankEdit.name.trim()} className="w-full">
                         Guardar cambios
                       </Button>
+                    </div>
+                  </ControlBase>
+
+                  <ControlBase className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Cursos desbloqueados por rango</p>
+                        <p className="mt-1 text-xs text-foreground/70">Cursos disponibles al alcanzar este rango.</p>
+                      </div>
+                      <Button type="button" variant="subtle" onClick={loadRankUnlocks} disabled={busy || !selectedRankId}>
+                        Recargar
+                      </Button>
+                    </div>
+
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                      <Select
+                        value={rankUnlockCourseId}
+                        onChange={(e) => setRankUnlockCourseId(e.target.value === "" ? "" : Number(e.target.value))}
+                        disabled={busy || !selectedRankId}
+                      >
+                        <option value="">Seleccionar curso…</option>
+                        {courses
+                          .slice()
+                          .sort((a, b) => (a.code ?? "").localeCompare(b.code ?? ""))
+                          .map((c) => {
+                            const isUnlocked = rankUnlocks.some((u) => u.course?.id === c.id);
+                            const tag = isUnlocked ? "(desbloqueado)" : "";
+                            return (
+                              <option key={c.id} value={c.id} disabled={isUnlocked}>
+                                {c.code} — {c.name} {tag}
+                              </option>
+                            );
+                          })}
+                      </Select>
+                      <Button type="button" onClick={onAddRankUnlock} disabled={busy || !selectedRankId || rankUnlockCourseId === ""}>
+                        Agregar
+                      </Button>
+                    </div>
+
+                    <div className="mt-5">
+                      {rankUnlocks.length ? (
+                        <ul className="space-y-2">
+                          {rankUnlocks
+                            .slice()
+                            .sort((a, b) => (a.course?.code ?? "").localeCompare(b.course?.code ?? ""))
+                            .map((row) => (
+                              <li
+                                key={row.id}
+                                className="flex flex-col justify-between gap-2 rounded-xl border border-foreground/10 bg-background/20 px-3 py-2 sm:flex-row sm:items-center"
+                              >
+                                <span className="text-sm text-foreground">
+                                  {row.course.code} — {row.course.name}
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="subtle"
+                                  onClick={() => onRemoveRankUnlock(row.course.id)}
+                                  disabled={busy}
+                                  className="px-3 py-2 text-xs"
+                                >
+                                  Quitar
+                                </Button>
+                              </li>
+                            ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-foreground/70">
+                          {selectedRankId ? "No hay cursos desbloqueados para este rango." : "Seleccioná un rango para editar desbloqueos."}
+                        </p>
+                      )}
                     </div>
                   </ControlBase>
 

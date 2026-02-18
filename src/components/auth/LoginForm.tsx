@@ -108,6 +108,8 @@ export function LoginForm() {
           if (res?.error) {
             if (res.error === "CredentialsSignin") {
               setError("Correo o contraseña incorrectos");
+            } else if (res.error === "EmailNotVerified") {
+              setError("Debes verificar tu correo antes de iniciar sesión. Revisa tu bandeja (y spam). ");
             } else {
               setError("No se pudo conectar con el servidor de autenticación");
             }

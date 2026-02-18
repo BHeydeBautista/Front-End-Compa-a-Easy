@@ -3,23 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
-
-function withTimeout<T>(promise: Promise<T>, ms: number) {
-  return new Promise<T>((resolve, reject) => {
-    const id = setTimeout(() => reject(new Error("TIMEOUT")), ms);
-    promise
-      .then((v) => {
-        clearTimeout(id);
-        resolve(v);
-      })
-      .catch((err) => {
-        clearTimeout(id);
-        reject(err);
-      });
-  });
-}
 
 function GoogleIcon(props: { className?: string }) {
   return (
@@ -45,19 +29,20 @@ function GoogleIcon(props: { className?: string }) {
 }
 
 export function RegisterForm() {
-  const router = useRouter();
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [success, setSuccess] = React.useState<string | null>(null);
 
   return (
     <form
       onSubmit={async (e) => {
         e.preventDefault();
         setError(null);
+        setSuccess(null);
         setBusy(true);
         try {
           const payload = {
@@ -87,45 +72,12 @@ export function RegisterForm() {
             }
             return;
           }
-
-          const signInRes = await withTimeout(
-            signIn("credentials", {
-              email,
-              password,
-              redirect: false,
-            }),
-            35_000,
+          setSuccess(
+            "Cuenta creada. Te enviamos un correo para verificar tu email. Revisa tu bandeja (y spam) antes de iniciar sesión.",
           );
-
-          if (!signInRes) {
-            setError("Cuenta creada, pero no se pudo completar el inicio de sesión.");
-            return;
-          }
-
-          if (signInRes?.error) {
-            if (signInRes.error === "CredentialsSignin") {
-              setError("Cuenta creada, pero correo/contraseña inválidos");
-            } else {
-              setError("Cuenta creada, pero no se pudo conectar con el servidor de autenticación");
-            }
-            return;
-          }
-
-          if (signInRes.ok === false) {
-            setError("Cuenta creada, pero no se pudo iniciar sesión");
-            return;
-          }
-
-          router.push("/dashboard");
-          router.refresh();
+          // Avoid auto sign-in: backend blocks login until email is verified.
         } catch (err) {
-          if (err instanceof Error && err.message === "TIMEOUT") {
-            setError(
-              "El servidor tardó demasiado en responder (Render puede estar iniciando). Intenta nuevamente.",
-            );
-          } else {
-            setError("No se pudo crear la cuenta");
-          }
+          setError("No se pudo crear la cuenta");
         } finally {
           setBusy(false);
         }
@@ -201,6 +153,17 @@ export function RegisterForm() {
             </button>
           </div>
         </div>
+
+        {success ? (
+          <div className="rounded-xl border border-foreground/10 bg-foreground/5 px-4 py-3 text-sm text-foreground">
+            {success}
+            <div className="mt-2">
+              <Link href="/unete" className="font-semibold text-foreground hover:underline">
+                Ir a iniciar sesión
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         {error ? (
           <div className="rounded-xl border border-foreground/10 bg-foreground/5 px-4 py-3 text-sm text-foreground">

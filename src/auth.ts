@@ -71,7 +71,25 @@ export const authOptions: NextAuthOptions = {
           throw new Error("AUTH_BACKEND_UNREACHABLE");
         }
 
-        if (!response.ok) return null;
+        if (!response.ok) {
+          // Best-effort error mapping for better UX.
+          if (response.status === 401 || response.status === 400) {
+            const raw = await response.text();
+            try {
+              const parsed = raw ? (JSON.parse(raw) as any) : null;
+              const msg = String(parsed?.message ?? parsed?.error ?? "");
+              if (msg.toLowerCase().includes("email not verified")) {
+                throw new Error("EmailNotVerified");
+              }
+            } catch {
+              if (raw.toLowerCase().includes("email not verified")) {
+                throw new Error("EmailNotVerified");
+              }
+            }
+          }
+
+          return null;
+        }
 
         const json = (await response.json()) as BackendLoginResponse;
         if (!json?.token || !json?.user) return null;

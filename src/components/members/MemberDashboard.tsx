@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { LayerStack, Card } from "@/components/ui/layer-stack";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { cloudinaryImageUrl } from "@/lib/cloudinary";
 
 export type MemberDashboardCourseCatalog = Record<string, string>;
 
@@ -35,15 +36,19 @@ export function MemberDashboard(props: {
   member: Member;
   profile: {
     name: string;
+    publicName: string | null;
     steamName: string | null;
     whatsappName: string | null;
     phoneNumber: string | null;
     discord: string | null;
+    avatarPublicId: string | null;
+    backgroundPublicId: string | null;
   };
   api: {
     backendBaseUrl: string;
     accessToken: string;
   };
+  canEditGallery?: boolean;
   courseCatalog: MemberDashboardCourseCatalog;
   courseLogos: Record<string, string>;
   readOnly?: boolean;
@@ -58,6 +63,7 @@ export function MemberDashboard(props: {
     member,
     profile,
     api,
+    canEditGallery = false,
     courseCatalog,
     courseLogos,
     readOnly = false,
@@ -65,7 +71,7 @@ export function MemberDashboard(props: {
   } = props;
 
   const [form, setForm] = useState(() => ({
-    name: profile.name ?? "",
+    publicName: profile.publicName ?? "",
     steamName: profile.steamName ?? "",
     whatsappName: profile.whatsappName ?? "",
     phoneNumber: profile.phoneNumber ?? "",
@@ -75,6 +81,19 @@ export function MemberDashboard(props: {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState<string | null>(null);
 
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [backgroundBusy, setBackgroundBusy] = useState(false);
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
+
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
+
+  const [galleryBusy, setGalleryBusy] = useState(false);
+  const [galleryError, setGalleryError] = useState<string | null>(null);
+  const [galleryOk, setGalleryOk] = useState<string | null>(null);
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+
   const inputClassName =
     "mt-1 w-full rounded-xl border border-foreground/10 bg-background/40 px-3 py-2 text-sm text-foreground placeholder:text-foreground/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20";
 
@@ -83,8 +102,38 @@ export function MemberDashboard(props: {
   const canSubmit = useMemo(() => {
     if (readOnly) return false;
     if (saving) return false;
-    return form.name.trim().length > 0;
-  }, [form.name, readOnly, saving]);
+    return true;
+  }, [readOnly, saving]);
+
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+  const cloudinaryReady = Boolean(cloudName && uploadPreset);
+
+  async function uploadToCloudinary(file: File, folder: string) {
+    if (!cloudName || !uploadPreset) {
+      throw new Error("CLOUDINARY_NOT_CONFIGURED");
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", uploadPreset);
+    formData.append("folder", folder);
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const msg = await response.text().catch(() => "");
+      throw new Error(msg || "CLOUDINARY_UPLOAD_FAILED");
+    }
+
+    const json = (await response.json()) as { public_id?: string };
+    const publicId = String(json?.public_id ?? "").trim();
+    if (!publicId) throw new Error("CLOUDINARY_NO_PUBLIC_ID");
+    return publicId;
+  }
 
   async function onSaveProfile() {
     if (readOnly) return;
@@ -102,7 +151,7 @@ export function MemberDashboard(props: {
           Authorization: `Bearer ${api.accessToken}`,
         },
         body: JSON.stringify({
-          name: form.name,
+          publicName: form.publicName,
           steamName: form.steamName,
           whatsappName: form.whatsappName,
           phoneNumber: form.phoneNumber,
@@ -130,7 +179,158 @@ export function MemberDashboard(props: {
     }
   }
 
-  const normalizeCourseKey = (value: string) => value.replace(/[^a-z0-9]/gi, "").toUpperCase();
+  async function onUploadAvatar() {
+    if (readOnly) return;
+    if (!cloudinaryReady) {
+      setAvatarError("Cloudinary no está configurado.");
+      return;
+    }
+    if (!avatarFile) {
+      setAvatarError("Selecciona una imagen.");
+      return;
+    }
+
+    setAvatarBusy(true);
+    setAvatarError(null);
+    try {
+      const publicId = await uploadToCloudinary(avatarFile, "compania-easy/avatars");
+      const res = await fetch(`${api.backendBaseUrl}/auth/profile/avatar`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${api.accessToken}`,
+        },
+        body: JSON.stringify({ publicId }),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        window.location.assign("/api/auth/logout");
+        return;
+      }
+
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        setAvatarError(msg || "No se pudo actualizar el avatar.");
+        return;
+      }
+
+      setAvatarFile(null);
+      router.refresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      setAvatarError(msg || "No se pudo actualizar el avatar.");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function onUploadBackground() {
+    if (readOnly) return;
+    if (!cloudinaryReady) {
+      setBackgroundError("Cloudinary no está configurado.");
+      return;
+    }
+    if (!backgroundFile) {
+      setBackgroundError("Selecciona una imagen.");
+      return;
+    }
+
+    setBackgroundBusy(true);
+    setBackgroundError(null);
+    try {
+      const publicId = await uploadToCloudinary(backgroundFile, "compania-easy/backgrounds");
+      const res = await fetch(`${api.backendBaseUrl}/auth/profile/background`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${api.accessToken}`,
+        },
+        body: JSON.stringify({ publicId }),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        window.location.assign("/api/auth/logout");
+        return;
+      }
+
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        setBackgroundError(msg || "No se pudo actualizar el fondo.");
+        return;
+      }
+
+      setBackgroundFile(null);
+      router.refresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      setBackgroundError(msg || "No se pudo actualizar el fondo.");
+    } finally {
+      setBackgroundBusy(false);
+    }
+  }
+
+  async function onReplaceLatestGallery() {
+    if (readOnly) return;
+    if (!canEditGallery) return;
+
+    setGalleryOk(null);
+    setGalleryError(null);
+
+    if (!cloudinaryReady) {
+      setGalleryError("Cloudinary no está configurado.");
+      return;
+    }
+
+    if (galleryFiles.length < 3 || galleryFiles.length > 4) {
+      setGalleryError("Selecciona 3 o 4 imágenes.");
+      return;
+    }
+
+    setGalleryBusy(true);
+    try {
+      const publicIds: string[] = [];
+      for (const file of galleryFiles) {
+        const id = await uploadToCloudinary(file, "compania-easy/gallery/latest");
+        publicIds.push(id);
+      }
+
+      const res = await fetch(`${api.backendBaseUrl}/gallery/latest`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${api.accessToken}`,
+        },
+        body: JSON.stringify({ publicIds }),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        window.location.assign("/api/auth/logout");
+        return;
+      }
+
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        setGalleryError(msg || "No se pudo actualizar la galería.");
+        return;
+      }
+
+      setGalleryOk("Galería actualizada.");
+      setGalleryFiles([]);
+      router.refresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      setGalleryError(msg || "No se pudo actualizar la galería.");
+    } finally {
+      setGalleryBusy(false);
+    }
+  }
+
+  const normalizeCourseKey = (value: string) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/gi, "")
+      .toUpperCase();
 
   const container: Variants = {
     hidden: { opacity: 0, y: reduceMotion ? 0 : 12 },
@@ -342,102 +542,198 @@ export function MemberDashboard(props: {
 
                     <div className="mt-5 grid gap-4">
                       <div>
-                        <label className={labelClassName} htmlFor="profile-name">
-                          Nombre
+                        <label className={labelClassName} htmlFor="profile-public-name">
+                          Nombre público
                         </label>
                         <input
-                          id="profile-name"
+                          id="profile-public-name"
                           className={inputClassName}
-                          value={form.name}
+                          value={form.publicName}
                           onChange={
-                            readOnly ? undefined : (e) => setForm((prev) => ({ ...prev, name: e.target.value }))
+                            readOnly
+                              ? undefined
+                              : (e) => setForm((prev) => ({ ...prev, publicName: e.target.value }))
                           }
-                          placeholder="Tu nombre"
-                          autoComplete="name"
+                          placeholder={profile.name || "Tu nombre"}
+                          autoComplete="nickname"
                           disabled={readOnly}
                           readOnly={readOnly}
                         />
                       </div>
 
-                      <div>
-                        <label className={labelClassName} htmlFor="profile-phone">
-                          Número de teléfono
-                        </label>
-                        <input
-                          id="profile-phone"
-                          className={inputClassName}
-                          value={form.phoneNumber}
-                          onChange={
-                            readOnly
-                              ? undefined
-                              : (e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))
-                          }
-                          placeholder="Ej: +54 11 1234 5678"
-                          autoComplete="tel"
-                          disabled={readOnly}
-                          readOnly={readOnly}
-                        />
-                      </div>
+                      {!readOnly ? (
+                        <>
+                          <div>
+                            <p className={labelClassName}>Avatar</p>
+                            <div className="mt-2 flex items-center gap-4">
+                              <div className="relative h-12 w-12 overflow-hidden rounded-full border border-foreground/10 bg-background/30">
+                                {(() => {
+                                  const url = cloudinaryImageUrl(profile.avatarPublicId, {
+                                    w: 96,
+                                    h: 96,
+                                    crop: "fill",
+                                    gravity: "face",
+                                  });
 
-                      <div>
-                        <label className={labelClassName} htmlFor="profile-discord">
-                          Discord
-                        </label>
-                        <input
-                          id="profile-discord"
-                          className={inputClassName}
-                          value={form.discord}
-                          onChange={
-                            readOnly
-                              ? undefined
-                              : (e) => setForm((prev) => ({ ...prev, discord: e.target.value }))
-                          }
-                          placeholder="Ej: usuario#1234"
-                          autoComplete="off"
-                          disabled={readOnly}
-                          readOnly={readOnly}
-                        />
-                      </div>
+                                  if (!url) return null;
+                                  return (
+                                    <Image
+                                      src={url}
+                                      alt="Avatar"
+                                      fill
+                                      sizes="48px"
+                                      className="object-cover"
+                                    />
+                                  );
+                                })()}
+                              </div>
 
-                      <div>
-                        <label className={labelClassName} htmlFor="profile-steam">
-                          Steam
-                        </label>
-                        <input
-                          id="profile-steam"
-                          className={inputClassName}
-                          value={form.steamName}
-                          onChange={
-                            readOnly
-                              ? undefined
-                              : (e) => setForm((prev) => ({ ...prev, steamName: e.target.value }))
-                          }
-                          placeholder="Nombre en Steam"
-                          autoComplete="off"
-                          disabled={readOnly}
-                          readOnly={readOnly}
-                        />
-                      </div>
+                              <div className="flex-1">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  disabled={avatarBusy || !cloudinaryReady}
+                                  onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
+                                  className="block w-full text-sm text-foreground/80 file:mr-4 file:rounded-full file:border-0 file:bg-foreground/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-foreground hover:file:bg-foreground/15"
+                                />
+                                <div className="mt-2 flex items-center gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={onUploadAvatar}
+                                    disabled={avatarBusy || !avatarFile || !cloudinaryReady}
+                                    className={cn(
+                                      "inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors",
+                                      avatarBusy || !avatarFile || !cloudinaryReady
+                                        ? "bg-foreground/20 text-foreground/50 cursor-not-allowed"
+                                        : "bg-foreground text-background hover:bg-foreground/90",
+                                    )}
+                                  >
+                                    {avatarBusy ? "Subiendo..." : "Actualizar"}
+                                  </button>
+                                  {avatarError ? (
+                                    <p className="text-xs font-semibold text-destructive">{avatarError}</p>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
 
-                      <div>
-                        <label className={labelClassName} htmlFor="profile-whatsapp">
-                          WhatsApp
-                        </label>
-                        <input
-                          id="profile-whatsapp"
-                          className={inputClassName}
-                          value={form.whatsappName}
-                          onChange={
-                            readOnly
-                              ? undefined
-                              : (e) => setForm((prev) => ({ ...prev, whatsappName: e.target.value }))
-                          }
-                          placeholder="Nombre en WhatsApp"
-                          autoComplete="off"
-                          disabled={readOnly}
-                          readOnly={readOnly}
-                        />
-                      </div>
+                          <div>
+                            <p className={labelClassName}>Fondo</p>
+                            <div className="mt-2 grid gap-2">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                disabled={backgroundBusy || !cloudinaryReady}
+                                onChange={(e) => setBackgroundFile(e.target.files?.[0] ?? null)}
+                                className="block w-full text-sm text-foreground/80 file:mr-4 file:rounded-full file:border-0 file:bg-foreground/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-foreground hover:file:bg-foreground/15"
+                              />
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={onUploadBackground}
+                                  disabled={backgroundBusy || !backgroundFile || !cloudinaryReady}
+                                  className={cn(
+                                    "inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors",
+                                    backgroundBusy || !backgroundFile || !cloudinaryReady
+                                      ? "bg-foreground/20 text-foreground/50 cursor-not-allowed"
+                                      : "bg-foreground text-background hover:bg-foreground/90",
+                                  )}
+                                >
+                                  {backgroundBusy ? "Subiendo..." : "Actualizar"}
+                                </button>
+                                {backgroundError ? (
+                                  <p className="text-xs font-semibold text-destructive">{backgroundError}</p>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      ) : null}
+
+                      {showPrivateDetails ? (
+                        <>
+                          <div>
+                            <label className={labelClassName} htmlFor="profile-phone">
+                              Número de teléfono
+                            </label>
+                            <input
+                              id="profile-phone"
+                              className={inputClassName}
+                              value={form.phoneNumber}
+                              onChange={
+                                readOnly
+                                  ? undefined
+                                  : (e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))
+                              }
+                              placeholder="Ej: +54 11 1234 5678"
+                              autoComplete="tel"
+                              disabled={readOnly}
+                              readOnly={readOnly}
+                            />
+                          </div>
+
+                          <div>
+                            <label className={labelClassName} htmlFor="profile-discord">
+                              Discord
+                            </label>
+                            <input
+                              id="profile-discord"
+                              className={inputClassName}
+                              value={form.discord}
+                              onChange={
+                                readOnly
+                                  ? undefined
+                                  : (e) => setForm((prev) => ({ ...prev, discord: e.target.value }))
+                              }
+                              placeholder="Ej: usuario#1234"
+                              autoComplete="off"
+                              disabled={readOnly}
+                              readOnly={readOnly}
+                            />
+                          </div>
+
+                          <div>
+                            <label className={labelClassName} htmlFor="profile-steam">
+                              Steam
+                            </label>
+                            <input
+                              id="profile-steam"
+                              className={inputClassName}
+                              value={form.steamName}
+                              onChange={
+                                readOnly
+                                  ? undefined
+                                  : (e) => setForm((prev) => ({ ...prev, steamName: e.target.value }))
+                              }
+                              placeholder="Nombre en Steam"
+                              autoComplete="off"
+                              disabled={readOnly}
+                              readOnly={readOnly}
+                            />
+                          </div>
+
+                          <div>
+                            <label className={labelClassName} htmlFor="profile-whatsapp">
+                              WhatsApp
+                            </label>
+                            <input
+                              id="profile-whatsapp"
+                              className={inputClassName}
+                              value={form.whatsappName}
+                              onChange={
+                                readOnly
+                                  ? undefined
+                                  : (e) => setForm((prev) => ({ ...prev, whatsappName: e.target.value }))
+                              }
+                              placeholder="Nombre en WhatsApp"
+                              autoComplete="off"
+                              disabled={readOnly}
+                              readOnly={readOnly}
+                            />
+                          </div>
+                        </>
+                      ) : null}
 
                       <div className="flex items-center gap-3">
                         {!readOnly ? (
@@ -466,6 +762,73 @@ export function MemberDashboard(props: {
                     </div>
                   </div>
                 </motion.section>
+
+                {canEditGallery ? (
+                  <motion.section
+                    variants={item}
+                    className={cn(
+                      "relative overflow-hidden",
+                      "bg-background/30 backdrop-blur supports-[backdrop-filter]:bg-background/20",
+                      "border border-foreground/10",
+                      "rounded-2xl",
+                    )}
+                  >
+                    <div
+                      className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),transparent_55%)]"
+                      aria-hidden="true"
+                    />
+                    <div className="relative p-6">
+                      <p className="text-sm font-semibold text-foreground">Galería (última misión)</p>
+                      <p className="mt-1 text-xs font-semibold tracking-wide text-foreground/60">
+                        Sube 3 o 4 imágenes. Se reemplazan las anteriores.
+                      </p>
+
+                      <div className="mt-4 grid gap-3">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          disabled={galleryBusy || !cloudinaryReady}
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files ?? []);
+                            setGalleryFiles(files);
+                          }}
+                          className="block w-full text-sm text-foreground/80 file:mr-4 file:rounded-full file:border-0 file:bg-foreground/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-foreground hover:file:bg-foreground/15"
+                        />
+
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={onReplaceLatestGallery}
+                            disabled={
+                              galleryBusy ||
+                              !cloudinaryReady ||
+                              galleryFiles.length < 3 ||
+                              galleryFiles.length > 4
+                            }
+                            className={cn(
+                              "inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold transition-colors",
+                              galleryBusy ||
+                                !cloudinaryReady ||
+                                galleryFiles.length < 3 ||
+                                galleryFiles.length > 4
+                                ? "bg-foreground/20 text-foreground/50 cursor-not-allowed"
+                                : "bg-foreground text-background hover:bg-foreground/90",
+                            )}
+                          >
+                            {galleryBusy ? "Subiendo..." : "Actualizar galería"}
+                          </button>
+                          {galleryOk ? (
+                            <p className="text-xs font-semibold text-foreground/70">{galleryOk}</p>
+                          ) : null}
+                          {galleryError ? (
+                            <p className="text-xs font-semibold text-destructive">{galleryError}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.section>
+                ) : null}
               </>
             ) : null}
           </div>

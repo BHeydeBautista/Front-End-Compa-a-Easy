@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { MemberDashboard, type MemberDashboardCourseCatalog } from "@/components/members/MemberDashboard";
 import { rankInsignia } from "@/components/members/company-members-hierarchy/data";
+import { cloudinaryImageUrl } from "@/lib/cloudinary";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -26,6 +27,7 @@ type BackendDashboardResponse = {
   user: {
     id: number;
     name: string;
+    publicName: string | null;
     email: string;
     role: string;
     rankId: number | null;
@@ -36,6 +38,8 @@ type BackendDashboardResponse = {
     whatsappName: string | null;
     phoneNumber: string | null;
     discord: string | null;
+    avatarPublicId: string | null;
+    backgroundPublicId: string | null;
     missionAttendanceCount: number;
     trainingAttendanceCount: number;
   };
@@ -225,12 +229,19 @@ export default async function DashboardPage() {
   }
 
   const rankName = data.user?.rank?.name ?? "";
+  const backgroundSrc = cloudinaryImageUrl(data.user?.backgroundPublicId, {
+    w: 1920,
+    h: 1080,
+    crop: "fill",
+  });
+  const publicName = (data.user?.publicName ?? "").trim();
+  const displayName = publicName || data.user?.name || session.user?.name || session.user?.email || "Usuario";
 
   return (
     <MemberDashboard
-      bgSrc="/img/20260123233002_1.jpg"
+      bgSrc={backgroundSrc ?? "/img/20260123233002_1.jpg"}
       member={{
-        nombre: data.user?.name ?? session.user?.name ?? session.user?.email ?? "Usuario",
+        nombre: displayName,
         rango: rankName || "Sin rango",
         rangoImg: resolveRankImage(rankName),
         division: prettyDivision(data.user?.division),
@@ -244,15 +255,19 @@ export default async function DashboardPage() {
       }}
       profile={{
         name: data.user?.name ?? session.user?.name ?? "",
+        publicName: data.user?.publicName ?? null,
         steamName: data.user?.steamName ?? null,
         whatsappName: data.user?.whatsappName ?? null,
         phoneNumber: data.user?.phoneNumber ?? null,
         discord: data.user?.discord ?? null,
+        avatarPublicId: data.user?.avatarPublicId ?? null,
+        backgroundPublicId: data.user?.backgroundPublicId ?? null,
       }}
       api={{
         backendBaseUrl,
         accessToken,
       }}
+      canEditGallery={role === "editor" || role === "moderator" || role === "super_admin"}
       courseCatalog={courseCatalog}
       courseLogos={courseLogos}
     />

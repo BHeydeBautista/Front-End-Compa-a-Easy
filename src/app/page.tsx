@@ -1,24 +1,44 @@
 import { HeroCarousel } from "@/components/hero/HeroCarousel";
 import { Section } from "@/components/ui/Section";
 import Image from "next/image";
-import { readdir } from "node:fs/promises";
-import path from "node:path";
+import { cloudinaryImageUrl } from "@/lib/cloudinary";
+
+type LatestGalleryResponse = {
+  images: Array<{ publicId: string; slot: number }>;
+};
 
 async function getGalleryImages() {
-  const directory = path.join(process.cwd(), "public", "img");
-  try {
-    const entries = await readdir(directory, { withFileTypes: true });
-    const files = entries
-      .filter((entry) => entry.isFile())
-      .map((entry) => entry.name)
-      .filter((name) => /\.(png|jpe?g|webp|avif)$/i.test(name))
-      .sort()
-      .reverse();
+  const backendBaseUrl = (
+    process.env.AUTH_BACKEND_URL ??
+    (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : "")
+  ).replace(/\/+$/, "");
 
-    return files.map((name) => ({
-      src: `/img/${name}`,
-      alt: "Imagen de la galería",
-    }));
+  if (!backendBaseUrl) return [] as Array<{ src: string; alt: string }>;
+
+  try {
+    const response = await fetch(`${backendBaseUrl}/gallery/latest`, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    if (!response.ok) return [] as Array<{ src: string; alt: string }>;
+
+    const data = (await response.json()) as LatestGalleryResponse;
+    const images = (data?.images ?? [])
+      .slice()
+      .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0))
+      .map((img) => {
+        const src = cloudinaryImageUrl(img.publicId, {
+          w: 1280,
+          h: 720,
+          crop: "fill",
+        });
+        if (!src) return null;
+        return { src, alt: "Imagen de la galería" };
+      })
+      .filter(Boolean) as Array<{ src: string; alt: string }>;
+
+    return images;
   } catch {
     return [] as Array<{ src: string; alt: string }>;
   }

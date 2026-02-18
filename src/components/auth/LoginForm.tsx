@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { signIn } from "next-auth/react";
+import { getProviders, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
@@ -68,6 +68,7 @@ function MicrosoftIcon(props: { className?: string }) {
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [microsoftEnabled, setMicrosoftEnabled] = React.useState<boolean>(false);
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
@@ -77,6 +78,22 @@ export function LoginForm() {
   const [canResendVerification, setCanResendVerification] = React.useState(false);
   const [resendBusy, setResendBusy] = React.useState(false);
   const [resendMessage, setResendMessage] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let alive = true;
+    getProviders()
+      .then((providers) => {
+        if (!alive) return;
+        setMicrosoftEnabled(Boolean(providers?.["azure-ad"]));
+      })
+      .catch(() => {
+        if (!alive) return;
+        setMicrosoftEnabled(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   React.useEffect(() => {
     const err = searchParams?.get("error");
@@ -183,14 +200,27 @@ export function LoginForm() {
           Iniciar sesión con Google
         </button>
 
-        <button
-          type="button"
-          onClick={() => signIn("azure-ad", { callbackUrl: "/dashboard" })}
-          className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-foreground/10 bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-        >
-          <MicrosoftIcon className="h-5 w-5" />
-          Iniciar sesión con Microsoft
-        </button>
+        {microsoftEnabled ? (
+          <button
+            type="button"
+            onClick={() => signIn("azure-ad", { callbackUrl: "/dashboard" })}
+            className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-foreground/10 bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+          >
+            <MicrosoftIcon className="h-5 w-5" />
+            Iniciar sesión con Microsoft
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            title="Microsoft no está configurado (faltan variables de entorno)"
+            className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-foreground/10 bg-background px-4 text-sm font-semibold text-foreground/50"
+          >
+            <MicrosoftIcon className="h-5 w-5" />
+            Iniciar sesión con Microsoft
+          </button>
+        )}
 
         <button
           type="button"

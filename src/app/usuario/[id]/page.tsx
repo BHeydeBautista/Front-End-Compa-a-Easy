@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import { rankInsignia } from "@/components/members/company-members-hierarchy/data";
 import { MemberDashboard, type MemberDashboardCourseCatalog } from "@/components/members/MemberDashboard";
+import { cloudinaryImageUrl } from "@/lib/cloudinary";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -14,6 +15,8 @@ type PublicProfileResponse = {
   category: string | null;
   division: string | null;
   rank: { id: number; name: string } | null;
+  avatarPublicId?: string | null;
+  backgroundPublicId?: string | null;
   courses: {
     approved: Array<{ code: string; name: string }>;
   };
@@ -100,10 +103,15 @@ export default async function UsuarioPerfilPublicoPage({
   }
 
   const rankName = data.rank?.name ?? "";
+  const backgroundSrc = cloudinaryImageUrl(data.backgroundPublicId, {
+    w: 1920,
+    h: 1080,
+    crop: "fill",
+  });
 
   return (
     <MemberDashboard
-      bgSrc="/img/20260123233002_1.jpg"
+      bgSrc={backgroundSrc ?? "/img/20260123233002_1.jpg"}
       member={{
         nombre: data.name ?? "Usuario",
         rango: rankName || "Sin rango",
@@ -119,10 +127,13 @@ export default async function UsuarioPerfilPublicoPage({
       }}
       profile={{
         name: data.name ?? "",
+        publicName: null,
         steamName: null,
         whatsappName: null,
         phoneNumber: null,
         discord: null,
+        avatarPublicId: data.avatarPublicId ?? null,
+        backgroundPublicId: data.backgroundPublicId ?? null,
       }}
       api={{
         backendBaseUrl,

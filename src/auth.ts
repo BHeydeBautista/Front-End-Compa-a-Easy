@@ -22,11 +22,22 @@ async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: num
   }
 }
 
+function isAbortError(err: unknown) {
+  const anyErr = err as any;
+  return (
+    anyErr?.name === "AbortError" ||
+    anyErr?.code === "ABORT_ERR" ||
+    String(anyErr?.message ?? "").toLowerCase().includes("aborted")
+  );
+}
+
 const BACKEND_AUTH_TIMEOUT_MS = 35_000;
 // Google exchange can be slower due to cold starts on free hosting.
 const BACKEND_GOOGLE_EXCHANGE_TIMEOUT_MS = 90_000;
 // Microsoft exchange can be slower due to cold starts on free hosting.
 const BACKEND_MICROSOFT_EXCHANGE_TIMEOUT_MS = 90_000;
+
+const BACKEND_OAUTH_EXCHANGE_RETRY_TIMEOUT_MS = 30_000;
 
 type BackendLoginResponse = {
   token: string;
@@ -166,16 +177,34 @@ export const authOptions: NextAuthOptions = {
           : BACKEND_MICROSOFT_EXCHANGE_TIMEOUT_MS;
 
       try {
-        const response = await fetchWithTimeout(
-          `${backendBaseUrl}${endpoint}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idToken }),
-            cache: "no-store",
-          },
-          timeoutMs,
-        );
+        const makeRequest = (timeout: number) =>
+          fetchWithTimeout(
+            `${backendBaseUrl}${endpoint}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ idToken }),
+              cache: "no-store",
+            },
+            timeout,
+          );
+
+        let response: Response;
+        try {
+          response = await makeRequest(timeoutMs);
+        } catch (err) {
+          // If the backend is waking up (cold start), the first attempt can time out.
+          // A quick retry often succeeds once the instance is warm.
+          if (isAbortError(err)) {
+            console.warn(
+              "[auth] Backend oauth exchange timed out; retrying once",
+              account.provider,
+            );
+            response = await makeRequest(BACKEND_OAUTH_EXCHANGE_RETRY_TIMEOUT_MS);
+          } else {
+            throw err;
+          }
+        }
 
         if (!response.ok) {
           console.error("[auth] Backend oauth exchange failed", account.provider, response.status);

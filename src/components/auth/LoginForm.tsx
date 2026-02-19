@@ -80,6 +80,12 @@ export function LoginForm() {
   const [resendMessage, setResendMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    // Best-effort: warm up backend to reduce OAuth exchange timeouts on cold starts.
+    // Does not block the UI and errors are intentionally ignored.
+    fetch("/api/auth/warmup", { method: "GET", cache: "no-store" }).catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
     let alive = true;
     getProviders()
       .then((providers) => {

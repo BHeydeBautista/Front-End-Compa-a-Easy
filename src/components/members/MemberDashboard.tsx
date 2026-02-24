@@ -877,17 +877,17 @@ export function MemberDashboard(props: {
                           aria-hidden="true"
                         />
                         <div className="relative flex h-full items-center gap-3 p-4">
-                          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-foreground/10 bg-background/40">
+                          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-foreground/10 bg-background/40">
                             {c.logo ? (
                               <Image
                                 src={c.logo}
                                 alt={c.abbr}
                                 fill
-                                sizes="48px"
-                                className="object-contain p-2"
+                                sizes="96px"
+                                className="object-contain p-1"
                               />
                             ) : (
-                              <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-foreground/60">
+                              <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-foreground/60">
                                 {c.abbr}
                               </div>
                             )}
@@ -929,17 +929,17 @@ export function MemberDashboard(props: {
                             aria-hidden="true"
                           />
                           <div className="relative flex h-full items-center gap-3 p-4">
-                            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-foreground/10 bg-background/30">
+                            <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-foreground/10 bg-background/30">
                               {c.logo ? (
                                 <Image
                                   src={c.logo}
                                   alt={c.abbr}
                                   fill
-                                  sizes="48px"
-                                  className="object-contain p-2 opacity-90"
+                                  sizes="96px"
+                                  className="object-contain p-1 opacity-90"
                                 />
                               ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-foreground/60">
+                                <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-foreground/60">
                                   {c.abbr}
                                 </div>
                               )}

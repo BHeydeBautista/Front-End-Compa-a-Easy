@@ -1321,6 +1321,24 @@ export function AdminPanel({
     }
   };
 
+  const onSeedAllCourses = async () => {
+    if (!accessToken || mode !== "full") return;
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await apiFetch<{ created: number; updated: number }>(
+        `${backendBaseUrl}/courses/seed/all`,
+        { accessToken, method: "POST" },
+      );
+      await loadBase();
+      logAudit("Cargar cursos seed", `created=${result.created} updated=${result.updated}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onUpdateCourse = async () => {
     if (!selectedCourseId || !selectedCourse) return;
     const patch: { code?: string; name?: string; description?: string } = {};
@@ -2193,6 +2211,12 @@ export function AdminPanel({
                 <div>
                   <h2 className="text-lg font-semibold tracking-tight text-foreground">Cursos</h2>
                   <p className="mt-1 text-sm text-foreground/70">Crear y modificar cursos.</p>
+                </div>
+
+                <div className="mt-4">
+                  <Button type="button" onClick={onSeedAllCourses} disabled={busy} className="w-full">
+                    Cargar todos los cursos
+                  </Button>
                 </div>
 
                 <div className="mt-5 grid grid-cols-1 gap-4">

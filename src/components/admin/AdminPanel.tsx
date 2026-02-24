@@ -508,8 +508,6 @@ export function AdminPanel({
     );
   }, [approvedRows]);
 
-  const [courseToToggleId, setCourseToToggleId] = React.useState<number | "">("");
-
   const [userSearch, setUserSearch] = React.useState("");
   const [userRoleFilter, setUserRoleFilter] = React.useState<UserRole | "all">("all");
   const [userStatusFilter, setUserStatusFilter] = React.useState<"all" | "active" | "inactive">("all");
@@ -741,7 +739,6 @@ export function AdminPanel({
     if (!selectedUser) {
       setRoleDraft("");
       setRankIdDraft("");
-      setCourseToToggleId("");
       setMissionAttendanceDraft("0");
       setTrainingAttendanceDraft("0");
       return;
@@ -750,7 +747,6 @@ export function AdminPanel({
     setRankIdDraft(
       typeof selectedUser.rankId === "number" ? selectedUser.rankId : null,
     );
-    setCourseToToggleId("");
     setMissionAttendanceDraft(String(selectedUser.missionAttendanceCount ?? 0));
     setTrainingAttendanceDraft(String(selectedUser.trainingAttendanceCount ?? 0));
   }, [selectedUser]);
@@ -1159,11 +1155,10 @@ export function AdminPanel({
     }
   };
 
-  const onToggleCourse = async () => {
+  const onToggleCourse = async (courseId: number) => {
     if (!selectedUserId) return;
-    if (courseToToggleId === "") return;
+    if (!Number.isFinite(courseId) || courseId <= 0) return;
 
-    const courseId = Number(courseToToggleId);
     const isApproved = approvedCourseIds.has(courseId);
 
     setError(null);
@@ -1819,68 +1814,32 @@ export function AdminPanel({
                         </Button>
                       </div>
 
-                      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                        <Select
-                          value={courseToToggleId}
-                          onChange={(e) => setCourseToToggleId(e.target.value === "" ? "" : Number(e.target.value))}
-                          disabled={busy}
-                        >
-                          <option value="">Seleccionar curso…</option>
-                          {courses.map((c) => {
-                            const tag = approvedCourseIds.has(c.id) ? "(aprobado)" : "";
-                            return (
-                              <option key={c.id} value={c.id}>
-                                {c.code} — {c.name} {tag}
-                              </option>
-                            );
-                          })}
-                        </Select>
-                        <Button type="button" onClick={onToggleCourse} disabled={busy || courseToToggleId === ""}>
-                          Cambiar
-                        </Button>
-                      </div>
-
-                      <div className="mt-5">
-                        {approvedRows.length ? (
-                          <ul className="space-y-2">
-                            {approvedRows.map((row) => (
-                              <li
-                                key={row.id}
-                                className="flex flex-col justify-between gap-2 rounded-xl border border-foreground/10 bg-background/20 px-3 py-2 sm:flex-row sm:items-center"
-                              >
-                                <span className="text-sm text-foreground">
-                                  {row.course.code} — {row.course.name}
-                                </span>
-                                <Button
-                                  type="button"
-                                  onClick={async () => {
-                                    if (!selectedUserId) return;
-                                    if (!confirm("¿Marcar como NO aprobado?") ) return;
-
-                                    setError(null);
-                                    setBusy(true);
-                                    try {
-                                      await apiFetch<{ ok: true }>(
-                                        `${backendBaseUrl}/users/${selectedUserId}/courses/approved/${row.course.id}`,
-                                        { accessToken, method: "DELETE" },
-                                      );
-                                      await loadApproved();
-                                    } catch (e) {
-                                      setError((e as Error).message);
-                                    } finally {
-                                      setBusy(false);
-                                    }
-                                  }}
-                                  disabled={busy}
-                                  className="px-3 py-2 text-xs"
+                      <div className="mt-4">
+                        {courses.length ? (
+                          <div className="max-h-80 space-y-2 overflow-auto pr-1">
+                            {courses.map((c) => {
+                              const checked = approvedCourseIds.has(c.id);
+                              return (
+                                <label
+                                  key={c.id}
+                                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-foreground/10 bg-background/20 px-3 py-2"
                                 >
-                                  Reprobar
-                                </Button>
-                              </li>
-                            ))}
-                          </ul>
+                                  <input
+                                    type="checkbox"
+                                    className="mt-1 h-4 w-4"
+                                    checked={checked}
+                                    disabled={busy}
+                                    onChange={() => onToggleCourse(c.id)}
+                                  />
+                                  <span className="text-sm text-foreground">
+                                    {c.code} — {c.name}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
                         ) : (
-                          <p className="text-sm text-foreground/70">No hay cursos aprobados.</p>
+                          <p className="text-sm text-foreground/70">No hay cursos para mostrar.</p>
                         )}
                       </div>
                     </ControlBase>

@@ -1,10 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import CompanyMembersHierarchy from "@/components/members/CompanyMembersHierarchy";
 import type { ActiveMemberInput, MemberType, Rank } from "@/components/members/company-members-hierarchy/types";
 import { rankOrder } from "@/components/members/company-members-hierarchy/data";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+const MEMBERS_REVALIDATE_SECONDS = 60;
+const FETCH_TIMEOUT_MS = 8000;
+
+export const revalidate = MEMBERS_REVALIDATE_SECONDS;
 
 type PublicMemberResponse = {
   id: number;
@@ -37,6 +38,19 @@ function mapCategory(category: string | null | undefined): MemberType | null {
   return null;
 }
 
+function inferTypeFromRank(rank: Rank): MemberType {
+  switch (rank) {
+    case "Capitán":
+      return "Oficial";
+    case "Sargento Primero":
+    case "Sargento":
+    case "Cabo Primero":
+      return "SubOficial";
+    default:
+      return "Enlistado";
+  }
+}
+
 export default async function MiembrosPage() {
   const backendBaseUrl = (
     process.env.AUTH_BACKEND_URL ??
@@ -48,19 +62,27 @@ export default async function MiembrosPage() {
   }
 
   let members: ActiveMemberInput[] = [];
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
+    const controller = new AbortController();
+    timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
     const response = await fetch(`${backendBaseUrl}/public/members`, {
       method: "GET",
-      cache: "no-store",
+      signal: controller.signal,
+      next: { revalidate: MEMBERS_REVALIDATE_SECONDS },
     });
 
     if (response.ok) {
       const data = (await response.json()) as PublicMemberResponse[];
       members = (data ?? []).flatMap((u) => {
-        const type = mapCategory(u.category);
-        if (!type) return [];
         const division = u.division ?? "";
         const rank = coerceRank(u.rank?.name);
+
+        const declaredType = mapCategory(u.category);
+        const inferredType = inferTypeFromRank(rank);
+        const type = declaredType && declaredType === inferredType ? declaredType : inferredType;
+
         return [
           {
             id: u.id,
@@ -74,6 +96,8 @@ export default async function MiembrosPage() {
     }
   } catch {
     members = [];
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 
   return <CompanyMembersHierarchy members={members} />;

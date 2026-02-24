@@ -5,7 +5,7 @@ import { rankOrder } from "@/components/members/company-members-hierarchy/data";
 const MEMBERS_REVALIDATE_SECONDS = 60;
 const FETCH_TIMEOUT_MS = 8000;
 
-export const revalidate = MEMBERS_REVALIDATE_SECONDS;
+export const revalidate = 60;
 
 type PublicMemberResponse = {
   id: number;

@@ -5,9 +5,72 @@ import { authOptions } from "@/auth";
 import { MemberDashboard, type MemberDashboardCourseCatalog } from "@/components/members/MemberDashboard";
 import { cloudinaryImageUrl } from "@/lib/cloudinary";
 import { resolveRankImage } from "@/lib/rank-images";
+import fs from "node:fs";
+import path from "node:path";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const normalizeKey = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toUpperCase();
+
+function buildPublicImageIndex(rootRelativeToPublic: string) {
+  const publicDir = path.join(process.cwd(), "public");
+  const absoluteRoot = path.join(publicDir, ...rootRelativeToPublic.split("/"));
+  const entries: Array<{ key: string; src: string }> = [];
+
+  const walk = (absDir: string, relDir: string) => {
+    let dirents: fs.Dirent[] = [];
+    try {
+      dirents = fs.readdirSync(absDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const d of dirents) {
+      if (d.isDirectory()) {
+        walk(path.join(absDir, d.name), path.posix.join(relDir, d.name));
+        continue;
+      }
+
+      if (!d.isFile()) continue;
+      if (!d.name.toLowerCase().endsWith(".png")) continue;
+
+      const fileBase = d.name.slice(0, -4); // without .png
+      const normalized = normalizeKey(fileBase.replace(/\.1$/, ""));
+      const src = path.posix.join("/", rootRelativeToPublic, relDir, d.name).replace(/\\/g, "/");
+
+      entries.push({ key: normalized, src });
+    }
+  };
+
+  walk(absoluteRoot, "");
+
+  const map: Record<string, string> = {};
+  for (const entry of entries) {
+    // Prefer the non-.1 variant if both exist.
+    if (!(entry.key in map) || !map[entry.key]?.includes(".png")) {
+      map[entry.key] = entry.src;
+    }
+    // If current path is a .png already and existing is a .1.png, override.
+    if (entry.src.endsWith(".png") && map[entry.key]?.includes(".1.png")) {
+      map[entry.key] = entry.src;
+    }
+  }
+
+  return map;
+}
+
+const courseLogoByKey = buildPublicImageIndex("img/Cursos");
+
+function resolveCourseLogo(courseCode: string) {
+  const key = normalizeKey(courseCode);
+  return courseLogoByKey[key] ?? null;
+}
 
 type PublicProfileResponse = {
   id: number;
@@ -90,6 +153,14 @@ export default async function UsuarioPerfilPublicoPage({
     if (c?.code) courseCatalog[c.code] = c.name ?? c.code;
   }
 
+  const courseLogos: Record<string, string> = {};
+  for (const code of Object.keys(courseCatalog)) {
+    const src = resolveCourseLogo(code);
+    if (src) {
+      courseLogos[normalizeKey(code)] = src;
+    }
+  }
+
   const rankName = data.rank?.name ?? "";
   const divisionRaw = data.division ?? null;
   const backgroundSrc = cloudinaryImageUrl(data.backgroundPublicId, {
@@ -130,7 +201,7 @@ export default async function UsuarioPerfilPublicoPage({
         accessToken,
       }}
       courseCatalog={courseCatalog}
-      courseLogos={{}}
+      courseLogos={courseLogos}
       readOnly
       showPrivateDetails={false}
     />

@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Comunidad Arma 3",
-  description: "Manual de cursos, gestión de miembros y asistencias.",
+  title: "Compañía Easy",
+  description: "Comunidad latinoamericana MILSIM de ArmA 3.",
 };
 
 export default function RootLayout({

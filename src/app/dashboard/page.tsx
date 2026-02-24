@@ -61,7 +61,10 @@ const normalizeKey = (value: string) =>
     .toUpperCase();
 
 function buildPublicImageIndex(rootRelativeToPublic: string) {
-  const publicDir = path.join(process.cwd(), "public");
+  const directPublicDir = path.join(process.cwd(), "public");
+  const publicDir = fs.existsSync(directPublicDir)
+    ? directPublicDir
+    : path.join(process.cwd(), "Frontend", "public");
   const absoluteRoot = path.join(publicDir, ...rootRelativeToPublic.split("/"));
   const entries: Array<{ key: string; src: string }> = [];
 

@@ -60,8 +60,9 @@ export function Navbar() {
     sessionUserId > 0;
 
   const isAuthenticated = status === "authenticated" && hasBackendSession;
+  const publicName = String((session?.user as any)?.publicName ?? "").trim();
   const displayName =
-    (session?.user as any)?.name ?? (session?.user as any)?.email ?? "Usuario";
+    publicName || (session?.user as any)?.name || (session?.user as any)?.email || "Usuario";
   const role = (session?.user as any)?.role as string | undefined;
   const normalizedRole = (role ?? "").toLowerCase();
   const isSuperAdmin = normalizedRole === "super_admin";

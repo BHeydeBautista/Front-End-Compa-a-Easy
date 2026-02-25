@@ -14,6 +14,7 @@ type UserRole = "super_admin" | "moderator" | "infraestructura" | "formacion" | 
 type User = {
   id: number;
   name: string;
+  publicName?: string | null;
   email: string;
   role: UserRole;
   rankId?: number | null;
@@ -66,6 +67,7 @@ type CourseInstructorRow = {
   user: {
     id: number;
     name: string;
+    publicName?: string | null;
     email: string;
     role: string;
   } | null;
@@ -90,6 +92,7 @@ type AttendanceSessionUsers = {
   users: Array<{
     id: number;
     name: string;
+    publicName?: string | null;
     email: string;
     deletedAt?: string | null;
     present: boolean;
@@ -336,6 +339,20 @@ function initials(name: string) {
   const a = parts[0]?.[0] ?? "U";
   const b = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
   return (a + b).toUpperCase();
+}
+
+function preferredUserName(user: {
+  publicName?: string | null;
+  name?: string | null;
+  email?: string | null;
+} | null | undefined) {
+  if (!user) return "";
+  const publicName = String(user.publicName ?? "").trim();
+  if (publicName) return publicName;
+  const name = String(user.name ?? "").trim();
+  if (name) return name;
+  const email = String(user.email ?? "").trim();
+  return email || "Usuario";
 }
 
 function Pill({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -928,7 +945,7 @@ export function AdminPanel({
     if (!q) return attendanceSessionUsers.users;
     return attendanceSessionUsers.users.filter((u) => {
       return (
-        String(u.name ?? "").toLowerCase().includes(q) ||
+        preferredUserName(u).toLowerCase().includes(q) ||
         String(u.email ?? "").toLowerCase().includes(q) ||
         String(u.id).includes(q)
       );
@@ -976,7 +993,7 @@ export function AdminPanel({
 
         if (!q) return true;
         return (
-          String(u.name ?? "").toLowerCase().includes(q) ||
+          preferredUserName(u).toLowerCase().includes(q) ||
           String(u.email ?? "").toLowerCase().includes(q) ||
           String(u.id).includes(q)
         );
@@ -1596,6 +1613,7 @@ export function AdminPanel({
                             const avatarSrc = rankName ? resolveRankImage(rankName, division) : "";
                             const isActive = !u.deletedAt;
                             const canToggleRole = u.role === "user" || u.role === "moderator";
+                            const displayName = preferredUserName(u);
 
                             return (
                               <div
@@ -1627,13 +1645,13 @@ export function AdminPanel({
                                         {avatarSrc ? (
                                           <Image src={avatarSrc} alt="" fill sizes="48px" className="object-contain" />
                                         ) : (
-                                          <span className="text-xs font-semibold text-foreground/80">{initials(u.name)}</span>
+                                          <span className="text-xs font-semibold text-foreground/80">{initials(displayName)}</span>
                                         )}
                                       </div>
 
                                       <div className="min-w-0">
-                                        <p title={u.name} className="truncate text-sm font-semibold text-foreground">
-                                          {u.name}
+                                        <p title={displayName} className="truncate text-sm font-semibold text-foreground">
+                                          {displayName}
                                         </p>
                                         <p title={`ID ${u.id} — ${u.email}`} className="truncate text-xs text-foreground/60">
                                           ID {u.id} — {u.email}
@@ -2108,7 +2126,7 @@ export function AdminPanel({
                               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="min-w-0">
                                   <p className="text-sm font-semibold text-foreground">
-                                    {u.name}{u.deletedAt ? " (inactivo)" : ""}
+                                    {preferredUserName(u)}{u.deletedAt ? " (inactivo)" : ""}
                                   </p>
                                   <p className="text-xs text-foreground/60">
                                     ID {u.id} — {u.email}
@@ -2207,7 +2225,7 @@ export function AdminPanel({
                                 <li key={row.id} className="flex items-center justify-between gap-3 rounded-xl border border-foreground/10 bg-background/20 px-3 py-2">
                                   <div className="min-w-0">
                                     <p className="truncate text-sm font-medium text-foreground">
-                                      {row.user?.name ?? "(sin usuario)"}
+                                      {row.user ? preferredUserName(row.user) : "(sin usuario)"}
                                     </p>
                                     <p className="truncate text-xs text-foreground/60">
                                       {row.user ? `ID ${row.user.id} — ${row.user.email}` : ""}
@@ -2243,10 +2261,10 @@ export function AdminPanel({
                               {users
                                 .filter((u) => u.role === "formacion")
                                 .slice()
-                                .sort((a, b) => a.name.localeCompare(b.name))
+                                .sort((a, b) => preferredUserName(a).localeCompare(preferredUserName(b)))
                                 .map((u) => (
                                   <option key={u.id} value={u.id}>
-                                    {u.name} (ID {u.id})
+                                    {preferredUserName(u)} (ID {u.id})
                                   </option>
                                 ))}
                             </Select>

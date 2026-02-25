@@ -251,7 +251,7 @@ export function MemberDashboard(props: {
       });
 
       if (response.status === 401 || response.status === 403) {
-        window.location.assign("/api/auth/logout");
+        window.location.assign("/api/auth/logout?next=/unete");
         return;
       }
 
@@ -285,7 +285,7 @@ export function MemberDashboard(props: {
       });
 
       if (res.status === 401 || res.status === 403) {
-        window.location.assign("/api/auth/logout");
+        window.location.assign("/api/auth/logout?next=/unete");
         return;
       }
 
@@ -319,7 +319,7 @@ export function MemberDashboard(props: {
       });
 
       if (res.status === 401 || res.status === 403) {
-        window.location.assign("/api/auth/logout");
+        window.location.assign("/api/auth/logout?next=/unete");
         return;
       }
 

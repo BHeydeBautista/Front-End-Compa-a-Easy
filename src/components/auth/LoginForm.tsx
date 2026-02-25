@@ -21,6 +21,22 @@ function withTimeout<T>(promise: Promise<T>, ms: number) {
   });
 }
 
+async function warmupBackend(timeoutMs = 8000) {
+  const controller = new AbortController();
+  const id = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    await fetch("/api/auth/warmup", {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch {
+    // ignore
+  } finally {
+    window.clearTimeout(id);
+  }
+}
+
 function GoogleIcon(props: { className?: string }) {
   return (
     <svg
@@ -199,7 +215,14 @@ export function LoginForm() {
       <div className="mt-6 space-y-3">
         <button
           type="button"
-          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+          disabled={busy}
+          onClick={async () => {
+            setError(null);
+            setBusy(true);
+            await warmupBackend();
+            // OAuth signIn redirects away; we keep busy true on purpose.
+            await signIn("google", { callbackUrl: "/dashboard" });
+          }}
           className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-foreground/10 bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
         >
           <GoogleIcon className="h-5 w-5" />
@@ -209,7 +232,13 @@ export function LoginForm() {
         {microsoftEnabled ? (
           <button
             type="button"
-            onClick={() => signIn("azure-ad", { callbackUrl: "/dashboard" })}
+            disabled={busy}
+            onClick={async () => {
+              setError(null);
+              setBusy(true);
+              await warmupBackend();
+              await signIn("azure-ad", { callbackUrl: "/dashboard" });
+            }}
             className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-foreground/10 bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
           >
             <MicrosoftIcon className="h-5 w-5" />

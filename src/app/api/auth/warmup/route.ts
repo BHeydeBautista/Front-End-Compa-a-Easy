@@ -26,7 +26,7 @@ export async function GET() {
 
   try {
     const res = await fetchWithTimeout(
-      `${backendBaseUrl}/`,
+      `${backendBaseUrl}/auth/warmup`,
       { method: "GET", cache: "no-store" },
       10_000,
     );

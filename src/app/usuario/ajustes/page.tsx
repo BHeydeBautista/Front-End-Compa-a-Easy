@@ -144,7 +144,7 @@ export default async function AjustesPerfilPage() {
   } catch {
     session = null;
   }
-  if (!session) redirect("/api/auth/logout");
+  if (!session) redirect("/api/auth/logout?next=/unete");
 
   const backendBaseUrl = (
     process.env.AUTH_BACKEND_URL ??
@@ -156,7 +156,7 @@ export default async function AjustesPerfilPage() {
   const userId = Number(userIdRaw);
 
   if (!backendBaseUrl || !accessToken || !Number.isFinite(userId) || userId <= 0) {
-    redirect("/api/auth/logout");
+    redirect("/api/auth/logout?next=/unete");
   }
 
   const response = await fetch(
@@ -171,7 +171,7 @@ export default async function AjustesPerfilPage() {
   );
 
   if (response.status === 401 || response.status === 403) {
-    redirect("/api/auth/logout");
+    redirect("/api/auth/logout?next=/unete");
   }
 
   if (!response.ok) {

@@ -4,6 +4,22 @@ import * as React from "react";
 import Link from "next/link";
 import { getProviders, signIn } from "next-auth/react";
 
+async function warmupBackend(timeoutMs = 8000) {
+  const controller = new AbortController();
+  const id = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    await fetch("/api/auth/warmup", {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch {
+    // ignore
+  } finally {
+    window.clearTimeout(id);
+  }
+}
+
 function GoogleIcon(props: { className?: string }) {
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true" className={props.className} focusable="false">
@@ -47,6 +63,10 @@ export function RegisterForm() {
   const [microsoftEnabled, setMicrosoftEnabled] = React.useState<boolean>(false);
 
   React.useEffect(() => {
+    fetch("/api/auth/warmup", { method: "GET", cache: "no-store" }).catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
     let alive = true;
     getProviders()
       .then((providers) => {
@@ -73,7 +93,10 @@ export function RegisterForm() {
       <div className="mt-6 space-y-3">
         <button
           type="button"
-          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+          onClick={async () => {
+            await warmupBackend();
+            await signIn("google", { callbackUrl: "/dashboard" });
+          }}
           className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-foreground/10 bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
         >
           <GoogleIcon className="h-5 w-5" />
@@ -83,7 +106,10 @@ export function RegisterForm() {
         {microsoftEnabled ? (
           <button
             type="button"
-            onClick={() => signIn("azure-ad", { callbackUrl: "/dashboard" })}
+            onClick={async () => {
+              await warmupBackend();
+              await signIn("azure-ad", { callbackUrl: "/dashboard" });
+            }}
             className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-foreground/10 bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
           >
             <MicrosoftIcon className="h-5 w-5" />

@@ -139,7 +139,7 @@ export default async function DashboardPage() {
   } catch {
     session = null;
   }
-  if (!session) redirect("/api/auth/logout");
+  if (!session) redirect("/api/auth/logout?next=/unete");
 
   const role = String((session as any).user?.role ?? "").toLowerCase();
   // Super admins should be able to access the member/profile dashboard.
@@ -163,7 +163,7 @@ export default async function DashboardPage() {
   const userId = Number(userIdRaw);
 
   if (!backendBaseUrl || !accessToken || !Number.isFinite(userId) || userId <= 0) {
-    redirect("/api/auth/logout");
+    redirect("/api/auth/logout?next=/unete");
   }
 
   const response = await fetch(`${backendBaseUrl}/users/${userId}/courses/dashboard`, {
@@ -175,7 +175,7 @@ export default async function DashboardPage() {
   });
 
   if (response.status === 401 || response.status === 403) {
-    redirect("/api/auth/logout");
+    redirect("/api/auth/logout?next=/unete");
   }
 
   if (!response.ok) {

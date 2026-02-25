@@ -118,7 +118,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const res = NextResponse.redirect(new URL("/unete", req.url));
+  const next = req.nextUrl.searchParams.get("next") || "/";
+  const target = new URL(next, req.url);
+  const res = NextResponse.redirect(target);
   clearNextAuthCookies(req, res);
   return res;
 }

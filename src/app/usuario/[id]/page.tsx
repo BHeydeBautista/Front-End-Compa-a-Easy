@@ -120,7 +120,7 @@ export default async function UsuarioPerfilPublicoPage({
   } catch {
     session = null;
   }
-  if (!session) redirect("/api/auth/logout");
+  if (!session) redirect("/api/auth/logout?next=/unete");
 
   const backendBaseUrl = (
     process.env.AUTH_BACKEND_URL ??
@@ -129,7 +129,7 @@ export default async function UsuarioPerfilPublicoPage({
 
   const accessToken = (session as any).accessToken as string | undefined;
   if (!backendBaseUrl || !accessToken) {
-    redirect("/api/auth/logout");
+    redirect("/api/auth/logout?next=/unete");
   }
 
   const response = await fetch(`${backendBaseUrl}/profiles/${userId}`, {
@@ -141,7 +141,7 @@ export default async function UsuarioPerfilPublicoPage({
   });
 
   if (response.status === 401 || response.status === 403) {
-    redirect("/api/auth/logout");
+    redirect("/api/auth/logout?next=/unete");
   }
 
   if (!response.ok) {

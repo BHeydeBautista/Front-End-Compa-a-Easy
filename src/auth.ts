@@ -33,11 +33,11 @@ function isAbortError(err: unknown) {
 
 const BACKEND_AUTH_TIMEOUT_MS = 35_000;
 // Google exchange can be slower due to cold starts on free hosting.
-const BACKEND_GOOGLE_EXCHANGE_TIMEOUT_MS = 90_000;
+const BACKEND_GOOGLE_EXCHANGE_TIMEOUT_MS = 45_000;
 // Microsoft exchange can be slower due to cold starts on free hosting.
-const BACKEND_MICROSOFT_EXCHANGE_TIMEOUT_MS = 90_000;
+const BACKEND_MICROSOFT_EXCHANGE_TIMEOUT_MS = 45_000;
 
-const BACKEND_OAUTH_EXCHANGE_RETRY_TIMEOUT_MS = 30_000;
+const BACKEND_OAUTH_EXCHANGE_RETRY_TIMEOUT_MS = 20_000;
 
 type BackendLoginResponse = {
   token: string;

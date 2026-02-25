@@ -13,7 +13,7 @@ export default async function AdminDashboardPage() {
   } catch {
     session = null;
   }
-  if (!session) redirect("/api/auth/logout");
+  if (!session) redirect("/api/auth/logout?next=/unete");
 
   const sessionLike = session as unknown as {
     user?: { role?: unknown };
@@ -34,7 +34,7 @@ export default async function AdminDashboardPage() {
     typeof sessionLike.accessToken === "string" ? sessionLike.accessToken : undefined;
 
   if (!backendBaseUrl || !accessToken) {
-    redirect("/api/auth/logout");
+    redirect("/api/auth/logout?next=/unete");
   }
 
   return (

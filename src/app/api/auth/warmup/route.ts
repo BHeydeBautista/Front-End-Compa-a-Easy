@@ -34,7 +34,14 @@ export async function GET() {
     return NextResponse.json({ ok: true, warmed: true, status: res.status });
   } catch (err) {
     // Best-effort warmup only; avoid surfacing errors to the user.
-    const name = typeof err === "object" && err ? (err as any).name : undefined;
+    let name: string | undefined;
+    if (err instanceof Error) {
+      name = err.name;
+    } else if (typeof err === "object" && err && "name" in err) {
+      const candidate = (err as { name?: unknown }).name;
+      if (typeof candidate === "string") name = candidate;
+    }
+
     return NextResponse.json({ ok: true, warmed: false, error: name ?? "warmup_failed" });
   }
 }

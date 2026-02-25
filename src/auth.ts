@@ -33,11 +33,15 @@ function isAbortError(err: unknown) {
 
 const BACKEND_AUTH_TIMEOUT_MS = 35_000;
 // Google exchange can be slower due to cold starts on free hosting.
-const BACKEND_GOOGLE_EXCHANGE_TIMEOUT_MS = 45_000;
+const BACKEND_GOOGLE_EXCHANGE_TIMEOUT_MS = 55_000;
 // Microsoft exchange can be slower due to cold starts on free hosting.
-const BACKEND_MICROSOFT_EXCHANGE_TIMEOUT_MS = 45_000;
+const BACKEND_MICROSOFT_EXCHANGE_TIMEOUT_MS = 55_000;
 
-const BACKEND_OAUTH_EXCHANGE_RETRY_TIMEOUT_MS = 20_000;
+const BACKEND_OAUTH_EXCHANGE_RETRY_TIMEOUT_MS = 55_000;
+
+async function sleep(ms: number) {
+  await new Promise((r) => setTimeout(r, ms));
+}
 
 type BackendLoginResponse = {
   token: string;
@@ -189,6 +193,18 @@ export const authOptions: NextAuthOptions = {
             timeout,
           );
 
+        const bestEffortWarmup = async () => {
+          try {
+            await fetchWithTimeout(
+              `${backendBaseUrl}/auth/warmup`,
+              { method: "GET", cache: "no-store" },
+              10_000,
+            );
+          } catch {
+            // ignore
+          }
+        };
+
         let response: Response;
         try {
           response = await makeRequest(timeoutMs);
@@ -200,6 +216,8 @@ export const authOptions: NextAuthOptions = {
               "[auth] Backend oauth exchange timed out; retrying once",
               account.provider,
             );
+            await bestEffortWarmup();
+            await sleep(750);
             response = await makeRequest(BACKEND_OAUTH_EXCHANGE_RETRY_TIMEOUT_MS);
           } else {
             throw err;

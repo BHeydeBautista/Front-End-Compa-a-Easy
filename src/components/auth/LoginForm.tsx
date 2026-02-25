@@ -21,20 +21,36 @@ function withTimeout<T>(promise: Promise<T>, ms: number) {
   });
 }
 
-async function warmupBackend(timeoutMs = 8000) {
-  const controller = new AbortController();
-  const id = window.setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    await fetch("/api/auth/warmup", {
-      method: "GET",
-      cache: "no-store",
-      signal: controller.signal,
-    });
-  } catch {
-    // ignore
-  } finally {
-    window.clearTimeout(id);
+async function warmupBackend(options?: {
+  totalBudgetMs?: number;
+  perTryTimeoutMs?: number;
+  pauseMs?: number;
+}) {
+  const totalBudgetMs = options?.totalBudgetMs ?? 25_000;
+  const perTryTimeoutMs = options?.perTryTimeoutMs ?? 8_000;
+  const pauseMs = options?.pauseMs ?? 700;
+
+  const start = Date.now();
+  while (Date.now() - start < totalBudgetMs) {
+    const controller = new AbortController();
+    const id = window.setTimeout(() => controller.abort(), perTryTimeoutMs);
+    try {
+      const res = await fetch("/api/auth/warmup", {
+        method: "GET",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (res.ok) return true;
+    } catch {
+      // ignore
+    } finally {
+      window.clearTimeout(id);
+    }
+
+    await new Promise((r) => window.setTimeout(r, pauseMs));
   }
+
+  return false;
 }
 
 function GoogleIcon(props: { className?: string }) {

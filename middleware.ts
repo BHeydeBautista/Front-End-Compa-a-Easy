@@ -27,22 +27,27 @@ export default async function middleware(req: NextRequest) {
     req.nextUrl.protocol === "https:" ||
     req.headers.get("x-forwarded-proto") === "https";
 
-  const token = await getToken({
-    req,
-    secret: process.env.NEXTAUTH_SECRET,
-    // Avoid relying on NEXTAUTH_URL inside Edge/Middleware to infer secure cookies.
-    // In some hosting setups env injection differs between Node and Edge, which can
-    // cause middleware to look for `next-auth.session-token` while NextAuth sets
-    // `__Secure-next-auth.session-token`.
-    secureCookie: isSecureRequest,
-  });
+  // Try both secure and non-secure cookie variants.
+  // Depending on hosting/env (e.g. NEXTAUTH_URL inference), NextAuth might set
+  // `next-auth.session-token` while middleware expects `__Secure-next-auth.session-token`.
+  const token =
+    (await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET,
+      secureCookie: isSecureRequest,
+    })) ??
+    (await getToken({
+      req,
+      secret: process.env.NEXTAUTH_SECRET,
+      secureCookie: !isSecureRequest,
+    }));
 
   const logoutToLogin = () =>
     NextResponse.redirect(new URL("/api/auth/logout?next=/unete", req.url));
 
   if (!token) return logoutToLogin();
 
-  const accessToken = (token as any)?.accessToken;
+  const accessToken = (token as { accessToken?: unknown })?.accessToken;
   if (typeof accessToken !== "string" || accessToken.length === 0) return logoutToLogin();
 
   const expMs = tryGetJwtExpMs(accessToken);

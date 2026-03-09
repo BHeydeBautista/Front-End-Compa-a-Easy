@@ -58,9 +58,6 @@ export function Footer() {
           <p className="text-xs text-foreground/60">
             © {year} Comunidad Arma 3. Todos los derechos reservados.
           </p>
-          <p className="text-xs text-foreground/60">
-            Hecho con Next.js.
-          </p>
         </div>
       </div>
     </footer>
